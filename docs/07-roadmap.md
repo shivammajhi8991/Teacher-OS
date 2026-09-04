@@ -41,7 +41,24 @@ Build order, each step shippable and testable before the next starts:
    profile yet; a returning teacher's redirect-to-profile-if-incomplete gating is a noted follow-up
    once `/auth/me` or a dedicated check exposes profile-completion state.
 
-3. **Student management** — manual add, invite-link/code, guardian linking, archive (not delete). *(docs/03 §3.4)*
+3. **Student management ✅ implemented** — `backend/src/modules/students` (student_profiles,
+   guardians, student_guardian_links, student_teacher_assignments, student_merge_log, and an
+   addition beyond docs/03 — student_invites, code-generation only) and
+   `mobile/lib/features/students` (list with status/search filters, add with inline guardian,
+   detail with edit/archive/add-guardian, an invite-code dialog), wired into the Teacher
+   dashboard's Students tab. Manual add ✅, guardian linking ✅ (multiple guardians, one guardian
+   → many children, docs/01 §1.3), archive (never hard-delete) ✅, merge for duplicate records ✅
+   with dedup-on-conflict for reassigned teacher/guardian links. Invite ⚠ code generation only —
+   redemption (student registers via the code, lands in a teacher-confirm queue per docs/08 §8.5)
+   depends on `enrollments`, which belongs to Classes (step 4), so it's a documented follow-up,
+   not built now. CSV import ⚠ deliberately skipped — the async-job pattern it needs (docs/04
+   §4.7) depends on the BullMQ queue that arrives with Notifications (step 8); scoped out rather
+   than half-built without it. A real response-shape/leak review happened during this pass: fixed
+   `addGuardian`'s response to match `getStudentDetail`'s guardian shape (was returning the raw
+   join entity) and `createInvite`'s to drop an unnecessarily embedded full TeacherProfile.
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (17 tests). Mobile hand-verified for import/path and API correctness only — still no
+   Flutter SDK in this environment.
 4. **Classes/batches** — creation, recurrence rules, enrollments, waitlist. *(docs/03 §3.5)*
 5. **Attendance** — quick-mark screen, bulk marking, edit-with-audit, percentage view. *(docs/03 §3.6, docs/05 offline sync)*
 6. **Fees** — fee structures, invoice generation, offline payment recording, receipts. *(docs/03 §3.7)*

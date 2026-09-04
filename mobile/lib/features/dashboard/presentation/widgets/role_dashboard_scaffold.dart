@@ -6,9 +6,9 @@ import '../../../../core/widgets/sync_status_chip.dart';
 /// recent activity → bottom nav) every role's dashboard reuses, so the four dashboards stay
 /// visually consistent for a user holding multiple roles (docs/06 §6.1).
 ///
-/// Only the "Dashboard" tab is wired up in this scaffold pass; the other tabs (docs/08 §8.1) are
-/// present for layout/visual review but not yet routed — see each feature's own README.md for
-/// its roadmap step.
+/// The "Dashboard" tab (index 0) is always wired up. Other tabs render a "coming soon" empty
+/// state (docs/08 §8.1) unless the caller supplies a builder for that index in [tabBuilders] —
+/// e.g. the Teacher dashboard passes one for the Students tab now that that feature exists.
 class RoleDashboardScaffold extends StatefulWidget {
   const RoleDashboardScaffold({
     super.key,
@@ -16,12 +16,14 @@ class RoleDashboardScaffold extends StatefulWidget {
     required this.tabs,
     required this.summaryTiles,
     this.onLogout,
+    this.tabBuilders = const {},
   });
 
   final String greeting;
   final List<({IconData icon, String label})> tabs;
   final List<({String label, String value, IconData icon})> summaryTiles;
   final VoidCallback? onLogout;
+  final Map<int, WidgetBuilder> tabBuilders;
 
   @override
   State<RoleDashboardScaffold> createState() => _RoleDashboardScaffoldState();
@@ -51,7 +53,10 @@ class _RoleDashboardScaffoldState extends State<RoleDashboardScaffold> {
             ),
         ],
       ),
-      body: _selectedTab == 0 ? _DashboardTabContent(summaryTiles: widget.summaryTiles) : _ComingSoonTab(label: widget.tabs[_selectedTab].label),
+      body: _selectedTab == 0
+          ? _DashboardTabContent(summaryTiles: widget.summaryTiles)
+          : (widget.tabBuilders[_selectedTab]?.call(context) ??
+              _ComingSoonTab(label: widget.tabs[_selectedTab].label)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedTab,
         onDestinationSelected: (index) => setState(() => _selectedTab = index),

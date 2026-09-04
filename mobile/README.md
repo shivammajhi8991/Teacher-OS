@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4, steps 1–2)
+## Implemented so far (docs/07 Phase 4, steps 1–3)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -27,9 +27,12 @@ inventory and flows this scaffold implements.
   (Basics / Teaching details / Fees & availability, per docs/08 §8.5) via a `Stepper`; a fresh
   teacher registration is routed here explicitly before landing on the dashboard. Document
   upload for verification is deferred (needs the presigned-URL flow that ships with Notes)
+- `features/students` — list (status/search filters), add (with an optional inline guardian,
+  per spec §3), detail (edit/archive/add-guardian), and an invite-code dialog; wired into the
+  Teacher dashboard's Students tab (`RoleDashboardScaffold.tabBuilders`)
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
-  docs/08 §8.1 bottom-nav tabs (only the Dashboard tab has real content so far)
+  docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher; the rest still show "coming soon")
 - `l10n/` — English + Hindi ARB files covering everything built so far (docs/05 §5.6)
 
 Every other `features/*` folder is a stub `README.md` pointing at its roadmap step and doc

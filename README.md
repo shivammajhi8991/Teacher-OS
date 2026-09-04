@@ -4,11 +4,12 @@ A production-oriented "Teacher Operating System": a cross-platform Flutter app (
 
 ## Status
 
-**Phase 1–3 (docs below) complete. Phase 4 (MVP build) in progress — steps 1 (Auth) and 2
-(Teacher onboarding & profile) are implemented end-to-end in both `backend/` and `mobile/`,
-verified locally (backend: `npm install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass;
-mobile: hand-verified import paths, not yet run through `flutter analyze`/`flutter test` — no
-Flutter SDK in the environment this was built in, see [mobile/README.md](mobile/README.md)).**
+**Phase 1–3 (docs below) complete. Phase 4 (MVP build) in progress — steps 1 (Auth), 2 (Teacher
+onboarding & profile), and 3 (Student Management) are implemented end-to-end in both `backend/`
+and `mobile/`, verified locally (backend: `npm install`, `tsc`, `eslint`, `nest build`, and
+`npm test` all pass — 17 tests; mobile: hand-verified import paths, not yet run through
+`flutter analyze`/`flutter test` — no Flutter SDK in the environment this was built in, see
+[mobile/README.md](mobile/README.md)).**
 
 Stack decisions locked: Flutter (Riverpod, clean/feature-first architecture) + NestJS + PostgreSQL
 + Redis + FCM, per user selection on 2026-09-04.
@@ -32,19 +33,19 @@ Read in this order:
 TeacherOS/
 ├── docs/                  # design documentation (8 documents, Phase 1–3)
 ├── backend/                # NestJS API — see backend/README.md
-│   ├── src/modules/         # auth ✅ users ✅ institutes ✅ teacher-profiles ✅ — rest are stub READMEs
+│   ├── src/modules/         # auth ✅ users ✅ institutes ✅ teacher-profiles ✅ students ✅ — rest are stub READMEs
 │   ├── src/common/          # guards, interceptors, decorators, filters — implemented
-│   ├── src/database/        # data-source.ts + two migrations — implemented
+│   ├── src/database/        # data-source.ts + three migrations — implemented
 │   └── test/                # auth.e2e-spec.ts
 ├── mobile/                 # Flutter app — see mobile/README.md
 │   └── lib/
 │       ├── app/             # router, theme, bootstrap — implemented
 │       ├── core/            # network, storage, error, theme, widgets — implemented (core/sync/ stubbed)
-│       └── features/        # auth ✅ onboarding ✅ dashboard (shell) ✅ — rest are stub READMEs
+│       └── features/        # auth ✅ onboarding ✅ students ✅ dashboard (shell) ✅ — rest are stub READMEs
 ├── admin-web/               # Admin panel (Flutter Web target, docs/02 §2.8) — not started
 └── infra/                   # docker-compose.yml for local Postgres + Redis
 ```
 
 ## Next step
 
-Phase 4 continues per [docs/07-roadmap.md](docs/07-roadmap.md)'s build order: Student Management → Classes/Batches → Attendance → Fees → Notes → Notifications, each following the same pattern auth and teacher-profiles established (backend module + migration, Flutter feature slice, tests) against the schema and API contract already agreed in `docs/03`/`docs/04`.
+Phase 4 continues per [docs/07-roadmap.md](docs/07-roadmap.md)'s build order: Classes/Batches → Attendance → Fees → Notes → Notifications, each following the same pattern the first three steps established (backend module + migration, Flutter feature slice, tests) against the schema and API contract already agreed in `docs/03`/`docs/04`.

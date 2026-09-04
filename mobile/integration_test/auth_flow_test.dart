@@ -13,7 +13,7 @@ import 'package:teacheros/app/app.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('registers a new teacher, lands on the teacher dashboard, and can log out', (
+  testWidgets('registering a new teacher lands on onboarding, not the dashboard directly', (
     tester,
   ) async {
     await tester.pumpWidget(const ProviderScope(child: TeacherOSApp()));
@@ -31,13 +31,14 @@ void main() {
     await tester.tap(find.widgetWithText(ElevatedButton, 'Create account'));
     await tester.pumpAndSettle(const Duration(seconds: 3));
 
-    // Redirected to /teacher (docs/08 §8.1 Teacher shell) on success.
-    expect(find.text('Dashboard'), findsOneWidget);
-    expect(find.text('Classes'), findsOneWidget);
+    // docs/07 Phase 4 step 2 — a fresh teacher has no teacher_profile yet, so registration sends
+    // them to /onboarding (register_screen.dart), not straight to /teacher.
+    expect(find.text('Set up your teaching profile'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.logout));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Welcome back'), findsOneWidget); // back on /login
+    // The category grid loads from the real backend (GET /teacher-categories, seeded by the
+    // TeacherProfiles migration) — assert at least one seeded category renders, e.g. "Academic
+    // Teacher", proving the onboarding→backend wiring (not just the redirect) actually works.
+    await tester.pumpAndSettle(const Duration(seconds: 2));
+    expect(find.text('Academic Teacher'), findsOneWidget);
   });
 }

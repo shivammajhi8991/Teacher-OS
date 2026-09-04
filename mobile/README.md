@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4, step 1)
+## Implemented so far (docs/07 Phase 4, steps 1–2)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -23,6 +23,10 @@ inventory and flows this scaffold implements.
   docs/08 §8.6
 - `features/auth` — full clean-architecture vertical slice: register, login, logout, session
   restore on cold start, wired to Riverpod (`AuthNotifier`)
+- `features/onboarding` — category grid (loaded from the backend) → progressive profile form
+  (Basics / Teaching details / Fees & availability, per docs/08 §8.5) via a `Stepper`; a fresh
+  teacher registration is routed here explicitly before landing on the dashboard. Document
+  upload for verification is deferred (needs the presigned-URL flow that ships with Notes)
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (only the Dashboard tab has real content so far)

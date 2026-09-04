@@ -7,6 +7,7 @@ import configuration, { AppConfig } from './config/configuration';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { InstitutesModule } from './modules/institutes/institutes.module';
+import { TeacherProfilesModule } from './modules/teacher-profiles/teacher-profiles.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -33,6 +34,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     AuthModule,
     UsersModule,
     InstitutesModule,
+    TeacherProfilesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

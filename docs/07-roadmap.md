@@ -27,7 +27,20 @@ Build order, each step shippable and testable before the next starts:
    `users` and `institutes` also implemented as supporting modules (needed for auth's role/tenant
    model), each with a first migration seeding roles + a starter permission set (docs/06 §6.2,
    grows as later steps add their own permission keys).
-2. **Teacher onboarding & profile** — category selection, profile fields, verification-request submission. *(docs/01 §1.1, docs/03 §3.3)*
+
+2. **Teacher onboarding & profile ✅ implemented** — `backend/src/modules/teacher-profiles`
+   (`teacher_categories` seeded with the spec's starter list, `teacher_profiles`,
+   `verification_requests`) and `mobile/lib/features/onboarding` (category grid → Basics →
+   Teaching details → Fees & availability, per docs/08 §8.5). Fee defaults are deliberately left
+   off the create/update DTO until the fees module (step 6) defines `fee_structures`; the
+   onboarding UI's last step says so rather than pretending to collect data nothing stores yet.
+   Verification-*document upload* UI is deferred (needs the presigned-URL flow from docs/02 §2.6,
+   which ships with Notes) — the submit-request *endpoint* exists now
+   (`POST /teacher-profiles/:id/verification-request`). A fresh teacher registration routes to
+   `/onboarding` explicitly (not the default post-login redirect) since a brand-new account has no
+   profile yet; a returning teacher's redirect-to-profile-if-incomplete gating is a noted follow-up
+   once `/auth/me` or a dedicated check exposes profile-completion state.
+
 3. **Student management** — manual add, invite-link/code, guardian linking, archive (not delete). *(docs/03 §3.4)*
 4. **Classes/batches** — creation, recurrence rules, enrollments, waitlist. *(docs/03 §3.5)*
 5. **Attendance** — quick-mark screen, bulk marking, edit-with-audit, percentage view. *(docs/03 §3.6, docs/05 offline sync)*

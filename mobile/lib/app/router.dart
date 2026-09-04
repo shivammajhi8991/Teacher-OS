@@ -9,6 +9,7 @@ import '../features/dashboard/presentation/screens/institute_admin_dashboard_scr
 import '../features/dashboard/presentation/screens/parent_dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/student_dashboard_screen.dart';
 import '../features/dashboard/presentation/screens/teacher_dashboard_screen.dart';
+import '../features/onboarding/presentation/screens/onboarding_screen.dart';
 
 /// docs/05 §5.3 — protected-by-default: every route not explicitly public redirects to /login
 /// when [AuthState] is [AuthUnauthenticated]. [AuthUnknown] (session restore in flight) holds
@@ -43,6 +44,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/', builder: (context, state) => const _SplashPlaceholder()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/register', builder: (context, state) => const RegisterScreen()),
+      // docs/07 Phase 4 step 2 — reached only via an explicit context.go from register_screen.dart
+      // right after a fresh teacher registration; not a `redirect` target itself (a returning
+      // teacher who already has a profile lands straight on /teacher, per _landingRouteFor).
+      GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),
       GoRoute(path: '/teacher', builder: (context, state) => const TeacherDashboardScreen()),
       GoRoute(path: '/student', builder: (context, state) => const StudentDashboardScreen()),
       GoRoute(path: '/parent', builder: (context, state) => const ParentDashboardScreen()),

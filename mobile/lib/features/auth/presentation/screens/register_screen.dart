@@ -50,7 +50,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         _isSubmitting = false;
         _errorMessage = failure.message;
       }),
-      (_) => setState(() => _isSubmitting = false), // router redirect handles navigation
+      (_) {
+        setState(() => _isSubmitting = false);
+        // docs/07 Phase 4 step 2 — a fresh teacher registration never has a teacher_profile yet,
+        // so send them straight to onboarding instead of the default /teacher redirect (which is
+        // still correct for student/parent, and for a *returning* teacher on login).
+        if (_role == 'teacher') context.go('/onboarding');
+      },
     );
   }
 

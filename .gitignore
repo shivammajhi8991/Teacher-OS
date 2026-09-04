@@ -1,0 +1,33 @@
+# Node / backend
+backend/node_modules/
+backend/dist/
+backend/.env
+backend/*.log
+
+# Flutter / mobile
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/build/
+mobile/.pub-cache/
+mobile/.pub/
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/android/.gradle/
+mobile/**/generated_plugin*
+*.g.dart
+*.freezed.dart
+
+# Admin web (Flutter Web target, docs/02 §2.8)
+admin-web/build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets
+*.env
+!*.env.example

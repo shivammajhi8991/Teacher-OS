@@ -1,0 +1,36 @@
+{
+  "@@locale": "en",
+  "appTitle": "TeacherOS",
+  "loginTitle": "Welcome back",
+  "loginSubtitle": "Sign in to continue",
+  "emailOrPhoneLabel": "Email or phone",
+  "passwordLabel": "Password",
+  "loginButton": "Log in",
+  "noAccountPrompt": "Don't have an account?",
+  "registerLink": "Register",
+  "registerTitle": "Create your account",
+  "fullNameLabel": "Full name",
+  "roleLabel": "I am a...",
+  "roleTeacher": "Teacher",
+  "roleStudent": "Student",
+  "roleParent": "Parent/Guardian",
+  "registerButton": "Create account",
+  "haveAccountPrompt": "Already have an account?",
+  "loginLink": "Log in",
+  "invalidCredentials": "Incorrect email/phone or password",
+  "genericError": "Something went wrong. Please try again.",
+  "networkError": "Couldn't reach the server — check your connection.",
+  "dashboardTitle": "Dashboard",
+  "todaysClasses": "Today's classes",
+  "noClassesToday": "No classes today.",
+  "syncStatusSynced": "Synced",
+  "syncStatusSyncing": "Syncing…",
+  "syncStatusPending": "{count} pending",
+  "@syncStatusPending": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "syncStatusConflict": "{count} conflicts",
+  "@syncStatusConflict": {
+    "placeholders": { "count": { "type": "int" } }
+  }
+}

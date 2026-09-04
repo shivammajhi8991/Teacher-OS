@@ -1,0 +1,36 @@
+{
+  "@@locale": "hi",
+  "appTitle": "TeacherOS",
+  "loginTitle": "वापसी पर स्वागत है",
+  "loginSubtitle": "जारी रखने के लिए साइन इन करें",
+  "emailOrPhoneLabel": "ईमेल या फ़ोन",
+  "passwordLabel": "पासवर्ड",
+  "loginButton": "लॉग इन करें",
+  "noAccountPrompt": "खाता नहीं है?",
+  "registerLink": "रजिस्टर करें",
+  "registerTitle": "अपना खाता बनाएं",
+  "fullNameLabel": "पूरा नाम",
+  "roleLabel": "मैं हूँ...",
+  "roleTeacher": "शिक्षक",
+  "roleStudent": "छात्र",
+  "roleParent": "अभिभावक",
+  "registerButton": "खाता बनाएं",
+  "haveAccountPrompt": "पहले से खाता है?",
+  "loginLink": "लॉग इन करें",
+  "invalidCredentials": "गलत ईमेल/फ़ोन या पासवर्ड",
+  "genericError": "कुछ गलत हो गया। कृपया पुनः प्रयास करें।",
+  "networkError": "सर्वर तक नहीं पहुँच सका — अपना कनेक्शन जांचें।",
+  "dashboardTitle": "डैशबोर्ड",
+  "todaysClasses": "आज की कक्षाएं",
+  "noClassesToday": "आज कोई कक्षा नहीं है।",
+  "syncStatusSynced": "सिंक हो गया",
+  "syncStatusSyncing": "सिंक हो रहा है…",
+  "syncStatusPending": "{count} लंबित",
+  "@syncStatusPending": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "syncStatusConflict": "{count} टकराव",
+  "@syncStatusConflict": {
+    "placeholders": { "count": { "type": "int" } }
+  }
+}

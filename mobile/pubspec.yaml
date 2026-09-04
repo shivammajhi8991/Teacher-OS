@@ -1,0 +1,57 @@
+name: teacheros
+description: "TeacherOS — Teacher & Student Management Platform (docs/05-flutter-architecture.md)"
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management — docs/05 §5.2. Plain (non-generator) Riverpod so this scaffold builds
+  # without a build_runner codegen step on a machine that doesn't have one configured yet.
+  flutter_riverpod: ^2.5.1
+
+  # Navigation + RBAC route guards — docs/05 §5.3.
+  go_router: ^14.2.7
+
+  # Networking — docs/02 §2.6/§2.7, docs/04 API contract.
+  dio: ^5.7.0
+
+  # Secure on-device token storage — docs/02 §2.4 (refresh token, never stored in plain prefs).
+  flutter_secure_storage: ^9.2.2
+
+  # Offline-first local database — docs/05 §5.4. Wired in a later Phase 4 step; declared now so
+  # the dependency and core/storage/ contract exist before core/sync/ is built against it.
+  drift: ^2.20.3
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.4
+  path: ^1.9.0
+
+  # Connectivity for the offline sync engine — docs/05 §5.4.
+  connectivity_plus: ^6.0.5
+
+  # Device id (auth token binding, docs/02 §2.4) and client-generated record ids (offline sync,
+  # docs/03 §3.9 — client UUIDs become the real primary key on server confirmation).
+  uuid: ^4.5.1
+
+  # i18n — docs/05 §5.6.
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  drift_dev: ^2.20.3
+  build_runner: ^2.4.13
+
+flutter:
+  uses-material-design: true
+  generate: true # ARB → AppLocalizations, see l10n.yaml

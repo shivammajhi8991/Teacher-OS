@@ -1,0 +1,239 @@
+# 3. Database Schema (PostgreSQL)
+
+## 3.1 Conventions used throughout
+
+- **Primary keys**: `uuid` (`gen_random_uuid()`), never auto-increment ints — avoids leaking record counts, and merges cleanly across offline-generated client records (see §3.9).
+- **Soft delete**: `deleted_at timestamptz null` on every table with historical/financial significance. Nothing user-facing is ever hard-deleted; "delete" in the UI sets `deleted_at` and the record drops out of default queries but stays for audit/reporting.
+- **Audit columns**: `created_at`, `updated_at` (both `timestamptz`, default `now()`, `updated_at` maintained by trigger), `created_by`, `updated_by` (FK → `users.id`).
+- **Tenancy**: `institute_id uuid null` (FK → `institutes.id`) on every tenant-scoped table; `null` = independent teacher. Enforced additionally by Postgres RLS policy `institute_id = current_setting('app.current_institute_id')::uuid OR institute_id IS NULL AND owner check`.
+- **Money**: `numeric(12,2)`, always with an explicit `currency char(3)` (ISO 4217) column — never a float, never an assumed currency.
+- Table names below are illustrative column sets, not exhaustive DDL — full migration files are generated at Phase 4.
+
+## 3.2 Identity, roles, institutes
+
+```
+users
+  id, email, phone, password_hash, full_name, avatar_url,
+  preferred_language ('en'|'hi'|...), timezone,
+  status ('active'|'suspended'|'pending_verification'),
+  last_login_at, created_at, updated_at, deleted_at
+
+roles                      -- 'teacher' | 'student' | 'parent' | 'institute_admin' | 'super_admin'
+user_roles                 -- (user_id, role_id, institute_id nullable) — a user CAN hold multiple roles
+                            -- e.g. an institute owner who also teaches; a parent who is also a tutor
+
+permissions                -- fine-grained: 'attendance.mark', 'fee.record_payment', 'student.delete', ...
+role_permissions           -- (role_id, permission_id) — see docs/06 for full matrix
+
+institutes
+  id, name, logo_url, address, contact_email, contact_phone,
+  subscription_plan_id (FK → subscription_plans, nullable at launch), status, created_at...
+
+branches
+  id, institute_id, name, address, timezone
+
+verification_requests      -- teacher-submitted qualification/ID docs for admin review
+  id, teacher_profile_id, document_urls[], status ('pending'|'approved'|'rejected'),
+  reviewed_by, reviewed_at, rejection_reason
+```
+
+## 3.3 Teacher profile & category system
+
+```
+teacher_categories          -- seed data: academic, home_tutor, sports_coach, music, dance,
+  id, name, slug, icon,      -- fitness, yoga, art, language, tech_trainer, other — NEW categories
+  default_performance_template_id,   -- addable via this table alone, no code change
+  default_fee_model
+  is_active
+
+teacher_profiles
+  id, user_id, institute_id (nullable), teacher_category_id,
+  headline, bio, experience_years, qualifications (jsonb array),
+  service_area, teaching_mode ('online'|'offline'|'both'),
+  subjects_or_skills (jsonb array of {name, level}),
+  class_duration_minutes_default, fee_structure_default_id,
+  verification_status ('unverified'|'pending'|'verified'), rating_avg, rating_count
+```
+
+`teacher_categories` being data, not an enum baked into code, is the mechanism satisfying the spec's "add new categories without major code changes."
+
+## 3.4 Students, guardians, many-to-many links
+
+```
+student_profiles
+  id, user_id (nullable — a student under 13 may have no login, parent manages),
+  institute_id, full_name, dob, gender, avatar_url,
+  emergency_contact_name, emergency_contact_phone, medical_notes,
+  join_date, enrollment_status ('active'|'inactive'|'left'|'archived'),
+  status_changed_at, source ('manual'|'invite_link'|'import'), created_at...
+
+guardians
+  id, user_id, full_name, phone, email, relationship
+
+student_guardian_links       -- many-to-many: multiple guardians per student, one guardian → many children
+  id, student_id, guardian_id, is_primary, consent_data_sharing boolean, consent_recorded_at
+
+student_teacher_assignments  -- many-to-many: a student can have multiple teachers concurrently
+  id, student_id, teacher_profile_id, subject_or_skill, assigned_from, assigned_to (nullable = ongoing)
+
+student_merge_log            -- resolves "duplicate student records" (see docs/01 §1.3)
+  id, surviving_student_id, merged_student_id, merged_by, merged_at, reason
+```
+
+## 3.5 Classes, batches, schedules — versioned
+
+```
+classes                      -- a "batch"/course/group or 1:1 arrangement
+  id, institute_id, teacher_profile_id, name, subject_or_activity,
+  class_type ('recurring'|'one_time'|'trial'),
+  mode ('online'|'offline'), location_or_meeting_link,
+  capacity_max, start_date, end_date (nullable = ongoing), status ('active'|'completed'|'cancelled')
+
+class_schedule_versions      -- effective-dated: a reschedule creates a new version, never edits history
+  id, class_id, effective_from, effective_to (nullable),
+  recurrence_rule (RFC 5545 RRULE string — handles daily/weekly/specific-days/custom),
+  start_time, end_time, timezone
+
+schedule_exceptions          -- single-occurrence overrides layered on top of the recurrence rule
+  id, class_id, occurrence_date, exception_type
+    ('holiday'|'cancelled'|'rescheduled'|'makeup'|'teacher_absent'|'extra_class'),
+  new_date, new_start_time, new_end_time, reason, created_by
+
+enrollments                  -- date-ranged: batch change = new row, never an update to class_id
+  id, student_id, class_id, enrolled_from, enrolled_to (nullable = current),
+  status ('active'|'waitlisted'|'trial'|'ended')
+
+waitlist_entries
+  id, class_id, student_id, requested_at, notified_at, converted_to_enrollment_id
+```
+
+**Conflict detection** (teacher double-booked, student overlapping classes, room double-booked) is computed at write-time by materializing each `class_schedule_versions` row against its `recurrence_rule` for the relevant date window and checking time-range overlap against other schedules sharing the same `teacher_profile_id` / `student_id` (via active enrollments) / `location_or_meeting_link`. Flagged as a warning, not a hard block — a teacher may deliberately double-book a short overlap (e.g., back-to-back with grace period), so the UI surfaces it rather than silently refusing.
+
+## 3.6 Attendance — with full audit trail
+
+```
+attendance_sessions          -- one row per (class, occurrence_date) — the "roll call" instance
+  id, class_id, occurrence_date, status ('scheduled'|'held'|'cancelled'),
+  marked_by, marked_at, marking_method ('manual'|'qr'|'location'|'bulk')
+
+attendance_records
+  id, attendance_session_id, student_id,
+  status ('present'|'absent'|'late'|'excused'|'holiday'|'cancelled'),
+  marked_at, marked_by, notes,
+  idempotency_key unique          -- prevents duplicate submission, see docs/01 §1.5
+
+attendance_audit_log          -- append-only: every edit to an attendance_record after initial mark
+  id, attendance_record_id, previous_status, new_status, changed_by, changed_at, reason
+```
+
+An `attendance_record` is only ever *updated* in place for same-day corrections before any dependent invoice references it; once referenced by an issued invoice line (`invoice_line_items.source_attendance_id`), further changes only write to `attendance_audit_log` and surface a "recalculation suggested" flag rather than mutating billed history (per docs/01 §1.5).
+
+## 3.7 Fees, invoices, payments — immutable ledger
+
+```
+fee_structures
+  id, institute_id nullable, teacher_profile_id nullable, class_id nullable,
+  billing_model ('monthly'|'per_class'|'course'|'hourly'|'custom'|'one_time_registration'),
+  amount, currency, proration_policy ('none'|'per_class_deduction'|'manual_adjustment_only'),
+  late_fee_rule (jsonb: {grace_days, flat_or_percent, amount})
+
+discounts                    -- scholarships/concessions, per-student or per-class
+  id, student_id nullable, class_id nullable, type ('flat'|'percent'), value, reason, approved_by
+
+invoices                     -- IMMUTABLE once status moves past 'draft'
+  id, student_id, institute_id nullable, teacher_profile_id,
+  billing_period_start, billing_period_end, subtotal, discount_total, late_fee_total, tax_total,
+  total_amount, currency, status ('draft'|'issued'|'paid'|'partial'|'overdue'|'void'),
+  gstin nullable, hsn_sac_code nullable,     -- optional India tax-compliance fields, docs/01 §1.3
+  issued_at, due_date
+
+invoice_line_items
+  id, invoice_id, description, amount, source_attendance_id nullable, source_class_id nullable
+
+credit_notes                 -- the ONLY mechanism to correct an issued invoice — never edit in place
+  id, invoice_id, amount, reason, issued_by, issued_at
+
+payments
+  id, invoice_id, student_id, amount, currency, method ('cash'|'upi'|'bank_transfer'|'gateway'),
+  status ('pending'|'confirmed'|'failed'|'refunded'),
+  gateway_reference nullable, idempotency_key unique,
+  recorded_by (teacher, for offline cash/UPI), recorded_at,
+  confirmed_via ('webhook'|'manual') -- gateway payments only confirmed by webhook, not client response
+
+payment_audit_log            -- every status transition, every manual correction
+  id, payment_id, previous_status, new_status, changed_by, changed_at, note
+
+refunds
+  id, payment_id, amount, reason, status ('pending'|'processed'|'rejected'), processed_by, processed_at
+
+institute_teacher_payouts    -- revenue-split for institute-collected fees (docs/01 §1.3)
+  id, institute_id, teacher_profile_id, invoice_id, payout_percent, payout_amount, status, paid_at
+```
+
+Overpayment resolves as a credit balance on the student's account (a `payments` row exceeding the invoice total leaves the excess visible as `student_credit_balance`, consumable against the next invoice) rather than an error state — matches real cash-collection behavior where a parent hands over a round number.
+
+## 3.8 Notes, assignments, communication, calendar
+
+```
+documents
+  id, institute_id, uploaded_by, title, file_url, file_type, folder_id nullable,
+  expiry_date nullable, version, previous_version_id nullable
+
+document_shares
+  id, document_id, shared_with_type ('student'|'class'|'institute'), shared_with_id,
+  allow_download boolean, shared_at
+
+document_access_log          -- "file access tracking where possible" from spec
+  id, document_id, accessed_by, accessed_at, action ('view'|'download')
+
+assignments
+  id, class_id nullable, student_id nullable, teacher_profile_id, title, description,
+  attachment_urls[], due_at, allow_late_submission, allow_resubmission
+
+assignment_submissions
+  id, assignment_id, student_id, attachment_urls[], submitted_at, is_late,
+  attempt_number, status ('submitted'|'reviewed'), grade, feedback, reviewed_by, reviewed_at
+
+announcements
+  id, institute_id nullable, teacher_profile_id nullable, target_type ('class'|'institute'|'individual'),
+  target_id, title, body, created_at
+
+notifications                -- generated events, fanned out per user via notification_preferences
+  id, user_id, type, title, body, data (jsonb), read_at, created_at, delivery_channel
+
+notification_preferences
+  id, user_id, category, channel ('push'|'email'|'digest_daily'|'digest_weekly'|'off')
+
+performance_metric_definitions   -- docs/01 §1.4
+  id, teacher_category_id nullable, teacher_profile_id nullable,
+  name, metric_type ('numeric'|'scale_1_5'|'pass_fail'|'text'|'percentage'), unit
+
+performance_records
+  id, student_id, metric_definition_id, class_id nullable, value, recorded_at, recorded_by
+
+calendar_events               -- unifies classes, exams, fee due dates, holidays into one queryable view
+  id, institute_id nullable, owner_type ('teacher'|'student'|'class'), owner_id,
+  event_type ('class_occurrence'|'assignment_due'|'fee_due'|'exam'|'holiday'|'custom'),
+  source_id nullable, title, starts_at, ends_at, timezone
+```
+
+## 3.9 Offline sync support
+
+```
+sync_queue                    -- client-generated records awaiting server confirmation
+  id (client-generated uuid — becomes the real PK on success, so no remap needed),
+  device_id, user_id, entity_type, payload (jsonb), client_created_at,
+  sync_status ('pending'|'synced'|'conflict'|'rejected'), server_processed_at, conflict_reason
+```
+
+Client-generated UUIDs as real primary keys (rather than server-assigned autoincrement) is what makes offline-created attendance/payment records mergeable without a remapping step — the same policy from `docs/01` §1.3: non-financial conflicts resolve last-write-wins with an audit entry; financial conflicts (e.g., two devices recorded a cash payment for the same invoice while offline) are never auto-merged — both land in `sync_status = 'conflict'` for explicit teacher resolution.
+
+## 3.10 Generic audit log (cross-cutting)
+
+```
+audit_logs
+  id, actor_id, actor_role, action, entity_type, entity_id, institute_id nullable,
+  before_state (jsonb nullable), after_state (jsonb nullable), ip_address, user_agent, created_at
+```
+
+Written by a shared interceptor on every mutating admin/teacher action touching students, fees, or role/permission changes — not per-module bespoke logging — so security review (`docs/` security section) has one place to look.

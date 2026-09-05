@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4, steps 1–4)
+## Implemented so far (docs/07 Phase 4, steps 1–5)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
@@ -21,12 +21,19 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   exceptions (holiday/cancel/reschedule/makeup/extra), enrollment with capacity + waitlist
   fallback, and a non-blocking conflict-check endpoint (teacher double-booking + same-institute
   location clashes over a 14-day window — student-schedule-overlap is a documented follow-up)
+- `modules/attendance` — attendance_sessions/attendance_records/attendance_audit_log: roster
+  GET + bulk-mark POST (docs/08 §8.3 Quick Attendance), single-record PATCH with an audit trail,
+  and a student-attendance-history GET with a computed percentage. Upsert-by-(session,student)
+  replaces the doc sketch's separate idempotency_key column — see attendance-record.entity.ts.
+  Teacher-only by default; institute_admin needs `institutes.allow_admin_attendance_override`
+  opted in (checked at runtime, not a blanket grant)
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging
-- Four migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Five migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
-  classes (schedule/enrollment tables + `class.manage`/`class.read` grants) — see docs/06 §6.2,
-  which grows as each further module ships
+  classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
+  (`attendance.mark`/`attendance.read` grants) — see docs/06 §6.2, which grows as each further
+  module ships
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted

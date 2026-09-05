@@ -10,6 +10,7 @@ import { InstitutesModule } from './modules/institutes/institutes.module';
 import { TeacherProfilesModule } from './modules/teacher-profiles/teacher-profiles.module';
 import { StudentsModule } from './modules/students/students.module';
 import { ClassesModule } from './modules/classes/classes.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -39,6 +40,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     TeacherProfilesModule,
     StudentsModule,
     ClassesModule,
+    AttendanceModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/widgets/empty_state.dart';
-import '../../../../core/widgets/sync_status_chip.dart';
+import '../../../../core/widgets/sync_status_chip.dart' as chip;
 
 /// docs/08 §8.7 — the shared region layout (alert zone → today's-classes → summary tiles →
 /// recent activity → bottom nav) every role's dashboard reuses, so the four dashboards stay
@@ -9,7 +11,7 @@ import '../../../../core/widgets/sync_status_chip.dart';
 /// The "Dashboard" tab (index 0) is always wired up. Other tabs render a "coming soon" empty
 /// state (docs/08 §8.1) unless the caller supplies a builder for that index in [tabBuilders] —
 /// e.g. the Teacher dashboard passes one for the Students tab now that that feature exists.
-class RoleDashboardScaffold extends StatefulWidget {
+class RoleDashboardScaffold extends ConsumerStatefulWidget {
   const RoleDashboardScaffold({
     super.key,
     required this.greeting,
@@ -26,19 +28,31 @@ class RoleDashboardScaffold extends StatefulWidget {
   final Map<int, WidgetBuilder> tabBuilders;
 
   @override
-  State<RoleDashboardScaffold> createState() => _RoleDashboardScaffoldState();
+  ConsumerState<RoleDashboardScaffold> createState() => _RoleDashboardScaffoldState();
 }
 
-class _RoleDashboardScaffoldState extends State<RoleDashboardScaffold> {
+class _RoleDashboardScaffoldState extends ConsumerState<RoleDashboardScaffold> {
   int _selectedTab = 0;
+
+  chip.SyncStatus _mapSyncStatus(SyncEngineStatus status) => switch (status) {
+        SyncEngineStatus.synced => chip.SyncStatus.synced,
+        SyncEngineStatus.syncing => chip.SyncStatus.syncing,
+        SyncEngineStatus.pending => chip.SyncStatus.pending,
+        SyncEngineStatus.error => chip.SyncStatus.conflict,
+      };
 
   @override
   Widget build(BuildContext context) {
+    final syncState = ref.watch(syncEngineProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.greeting),
         actions: [
-          const SyncStatusChip(status: SyncStatus.synced),
+          chip.SyncStatusChip(
+            status: _mapSyncStatus(syncState.status),
+            count: syncState.pendingCount,
+          ),
           const SizedBox(width: 8),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),

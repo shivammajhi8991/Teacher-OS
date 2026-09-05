@@ -5,11 +5,12 @@ A production-oriented "Teacher Operating System": a cross-platform Flutter app (
 ## Status
 
 **Phase 1–3 (docs below) complete. Phase 4 (MVP build) in progress — steps 1 (Auth), 2 (Teacher
-onboarding & profile), 3 (Student Management), and 4 (Classes/Batches, incl. RFC 5545 scheduling
-and non-blocking conflict detection) are implemented end-to-end in both `backend/` and `mobile/`,
-verified locally (backend: `npm install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass
-— 29 tests; mobile: hand-verified import paths, not yet run through `flutter analyze`/
-`flutter test` — no Flutter SDK in the environment this was built in, see
+onboarding & profile), 3 (Student Management), 4 (Classes/Batches, incl. RFC 5545 scheduling and
+non-blocking conflict detection), and 5 (Attendance, incl. the Quick Attendance flagship flow and
+the offline-sync engine) are implemented end-to-end in both `backend/` and `mobile/`, verified
+locally (backend: `npm install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass — 36
+tests; mobile: hand-verified import paths, not yet run through `flutter analyze`/`flutter test`
+— no Flutter SDK in the environment this was built in, see
 [mobile/README.md](mobile/README.md)).**
 
 Stack decisions locked: Flutter (Riverpod, clean/feature-first architecture) + NestJS + PostgreSQL
@@ -34,19 +35,19 @@ Read in this order:
 TeacherOS/
 ├── docs/                  # design documentation (8 documents, Phase 1–3)
 ├── backend/                # NestJS API — see backend/README.md
-│   ├── src/modules/         # auth ✅ users ✅ institutes ✅ teacher-profiles ✅ students ✅ classes ✅ — rest are stub READMEs
+│   ├── src/modules/         # auth ✅ users ✅ institutes ✅ teacher-profiles ✅ students ✅ classes ✅ attendance ✅ — rest are stub READMEs
 │   ├── src/common/          # guards, interceptors, decorators, filters — implemented
-│   ├── src/database/        # data-source.ts + four migrations — implemented
+│   ├── src/database/        # data-source.ts + five migrations — implemented
 │   └── test/                # auth.e2e-spec.ts
 ├── mobile/                 # Flutter app — see mobile/README.md
 │   └── lib/
 │       ├── app/             # router, theme, bootstrap — implemented
-│       ├── core/            # network, storage, error, theme, widgets — implemented (core/sync/ stubbed)
-│       └── features/        # auth ✅ onboarding ✅ students ✅ classes ✅ dashboard (shell) ✅ — rest are stub READMEs
+│       ├── core/            # network, storage, error, theme, widgets, sync — implemented (sync is JSON-file-backed, not Drift — docs/05 §5.4)
+│       └── features/        # auth ✅ onboarding ✅ students ✅ classes ✅ attendance ✅ dashboard (shell) ✅ — rest are stub READMEs
 ├── admin-web/               # Admin panel (Flutter Web target, docs/02 §2.8) — not started
 └── infra/                   # docker-compose.yml for local Postgres + Redis
 ```
 
 ## Next step
 
-Phase 4 continues per [docs/07-roadmap.md](docs/07-roadmap.md)'s build order: Attendance → Fees → Notes → Notifications, each following the same pattern the first four steps established (backend module + migration, Flutter feature slice, tests) against the schema and API contract already agreed in `docs/03`/`docs/04`. Attendance is also the first feature that needs `mobile/lib/core/sync/` (offline-first, docs/05 §5.4) actually built, not just stubbed.
+Phase 4 continues per [docs/07-roadmap.md](docs/07-roadmap.md)'s build order: Fees → Notes → Notifications, each following the same pattern the first five steps established (backend module + migration, Flutter feature slice, tests) against the schema and API contract already agreed in `docs/03`/`docs/04`. Fees is also where the fuller offline conflict policy (docs/05 §5.4 — financial edits never auto-merge) actually needs building, since Attendance's simpler upsert-converges-safely policy was a deliberate stand-in until a genuinely financial offline write existed.

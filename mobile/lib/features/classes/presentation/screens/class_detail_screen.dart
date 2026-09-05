@@ -4,6 +4,7 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
+import '../../../attendance/presentation/screens/quick_attendance_screen.dart';
 import '../../../students/domain/entities/student.dart';
 import '../../../students/presentation/providers/students_providers.dart';
 import '../../domain/entities/enrollment_summary.dart';
@@ -135,10 +136,24 @@ class ClassDetailScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: () => _openEdit(context, ref, cls),
-                icon: const Icon(Icons.edit_outlined),
-                label: const Text('Edit'),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => QuickAttendanceScreen(classId: classId)),
+                      ),
+                      icon: const Icon(Icons.fact_check_outlined),
+                      label: const Text('Take Attendance'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _openEdit(context, ref, cls),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Edit'),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
               _ScheduleSection(

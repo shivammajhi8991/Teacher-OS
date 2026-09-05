@@ -119,12 +119,14 @@ attendance_sessions          -- one row per (class, occurrence_date) — the "ro
 attendance_records
   id, attendance_session_id, student_id,
   status ('present'|'absent'|'late'|'excused'|'holiday'|'cancelled'),
-  marked_at, marked_by, notes,
-  idempotency_key unique          -- prevents duplicate submission, see docs/01 §1.5
+  marked_at, marked_by, notes, invoiced (bool, reserved for the Fees module)
+  UNIQUE (attendance_session_id, student_id)   -- see below
 
 attendance_audit_log          -- append-only: every edit to an attendance_record after initial mark
   id, attendance_record_id, previous_status, new_status, changed_by, changed_at, reason
 ```
+
+**Revised during implementation:** dropped the standalone `idempotency_key` column originally sketched above in favor of the `UNIQUE(attendance_session_id, student_id)` constraint plus upsert semantics in the service layer — re-submitting the same bulk-mark call is a no-op if nothing changed, and a genuine correction updates in place while writing `attendance_audit_log`. One mechanism now covers both "safe retry" (docs/01 §1.5 "duplicate attendance submission") and "edit with audit trail," instead of two overlapping ones. This is also what makes a queued *offline* bulk-mark call (docs/05 §5.4) safely replayable without a separate `Idempotency-Key` header (docs/04 §4.2).
 
 An `attendance_record` is only ever *updated* in place for same-day corrections before any dependent invoice references it; once referenced by an issued invoice line (`invoice_line_items.source_attendance_id`), further changes only write to `attendance_audit_log` and surface a "recalculation suggested" flag rather than mutating billed history (per docs/01 §1.5).
 

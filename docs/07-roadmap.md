@@ -83,7 +83,33 @@ Build order, each step shippable and testable before the next starts:
    green (29 tests, 5 new for the occurrence-materialization util + 6 for the service). Mobile
    hand-verified for import/path and API-shape correctness only — still no Flutter SDK in this
    environment.
-5. **Attendance** — quick-mark screen, bulk marking, edit-with-audit, percentage view. *(docs/03 §3.6, docs/05 offline sync)*
+5. **Attendance ✅ implemented** — `backend/src/modules/attendance` (attendance_sessions,
+   attendance_records, attendance_audit_log) and `mobile/lib/features/attendance` (the Quick
+   Attendance screen, docs/08 §8.3's flagship flow). One real schema improvement over the docs/03
+   §3.6 sketch: dropped the separate `idempotency_key` column in favor of a
+   UNIQUE(session, student) constraint + upsert semantics — one mechanism now covers both "safe
+   retry of the same bulk-mark call" and "edit with audit trail," instead of two overlapping ones
+   (see attendance-record.entity.ts for the full reasoning). That upsert design is also what makes
+   a queued offline bulk-mark call safely replayable with no separate Idempotency-Key header.
+   Access is teacher-only by default; an institute_admin can mark only if their institute has
+   opted into `allowAdminAttendanceOverride` (docs/06 §6.3), checked at runtime rather than a
+   blanket permission grant. Handles the named edge cases directly: a cancelled/holiday occurrence
+   rejects bulk-marking with a clear error (checked against `schedule_exceptions`); a student not
+   actively enrolled as of that date is skipped, not fatal to the whole batch; an already-invoiced
+   record refuses a plain edit (the Fees module will add a real adjustment path). **Deferred,
+   documented**: QR/location-based check-in (spec §5 "Advanced features," not core to the Quick
+   Attendance flow) and a mobile history/percentage-view screen (the backend endpoint
+   `GET /students/:id/attendance` exists and is usable, just no screen consumes it yet).
+
+   This step also stood up the offline-sync engine `mobile/lib/core/sync/` docs/05 §5.4
+   originally scoped around Drift — **that part changed**: Drift needs `build_runner` codegen
+   this environment can't run (no Flutter SDK), so the queue and the read-through cache are
+   plain JSON files behind the same read/write shape instead. `SyncEngine` is feature-agnostic
+   (a registered-replayer map, not a hardcoded attendance import) so swapping the storage layer
+   for Drift later, or adding a second offline-capable feature, doesn't touch its public API.
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (36 tests, 7 new). Mobile hand-verified for import/path and API-shape correctness only
+   — still no Flutter SDK in this environment.
 6. **Fees** — fee structures, invoice generation, offline payment recording, receipts. *(docs/03 §3.7)*
 7. **Notes** — upload, share to student/class, download tracking. *(docs/03 §3.8)*
 8. **Notifications** — FCM wiring, preference center, digest batching. *(docs/02 §2.5, docs/01 §1.3)*

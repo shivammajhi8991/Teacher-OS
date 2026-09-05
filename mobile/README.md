@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4, steps 1–4)
+## Implemented so far (docs/07 Phase 4, steps 1–5)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -17,6 +17,11 @@ inventory and flows this scaffold implements.
   de-duplicated refresh-and-retry on 401, per docs/02 §2.4)
 - `core/storage` — secure token storage (flutter_secure_storage, never SharedPreferences for
   tokens) + persistent device id
+- `core/sync` — offline queue (`SyncQueueStore`) + read-through cache (`OfflineCacheStore`),
+  both JSON-file-backed rather than the originally-planned Drift (no Flutter SDK to run its
+  codegen in this environment — see docs/05 §5.4 for the swap-in path back to Drift later).
+  `SyncEngine` drains the queue on reconnect/periodically via a registered-replayer map, kept
+  feature-agnostic on purpose — Attendance is the only registrant so far
 - `core/error`, `core/utils/result.dart` — a small hand-rolled `Result<T>` so repositories return
   failures as data (docs/05 §5.1), no external functional-programming dependency
 - `core/theme`, `core/widgets` — design tokens + the empty/loading/error/sync-status widgets from
@@ -38,6 +43,12 @@ inventory and flows this scaffold implements.
   `presentation/providers` skips the usecase-wrapper layer the other features use — with 9
   near-identical operations, a wrapper class per action added files with no behavior; see that
   file's comment for the reasoning and when to add one back
+- `features/attendance` — the Quick Attendance screen (docs/08 §8.3): roster defaults every
+  student to Present, tap a chip to cycle Present→Absent→Late→Excused, Save bulk-marks. Reachable
+  from a class's detail screen via "Take Attendance." Works offline: a failed Save queues via
+  `core/sync` and optimistically merges the marks into the cached roster immediately. Deferred
+  (documented in docs/07-roadmap.md's Phase 4 step 5 entry): a mobile history/percentage-view
+  screen — the backend endpoint exists and is usable, no screen consumes it yet
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher; the rest still show "coming soon")

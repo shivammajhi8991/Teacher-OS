@@ -15,6 +15,7 @@ export interface AppConfig {
     refreshExpiresIn: string;
   };
   redisUrl: string;
+  paymentGatewayWebhookSecret: string;
 }
 
 export default (): AppConfig => ({
@@ -34,4 +35,10 @@ export default (): AppConfig => ({
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '30d',
   },
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
+  // docs/04 §4.4 payment gateway webhook — verifies MockPaymentGatewayAdapter's own signed
+  // payloads (no real gateway account exists for this project, see gateway/ for why). A real
+  // adapter would read the equivalent secret Razorpay/Stripe issue for your webhook endpoint.
+  paymentGatewayWebhookSecret:
+    process.env.PAYMENT_GATEWAY_WEBHOOK_SECRET ??
+    'dev-only-mock-gateway-secret',
 });

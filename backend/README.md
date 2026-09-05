@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4, steps 1–5)
+## Implemented so far (docs/07 Phase 4, steps 1–6)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
@@ -27,13 +27,22 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   replaces the doc sketch's separate idempotency_key column — see attendance-record.entity.ts.
   Teacher-only by default; institute_admin needs `institutes.allow_admin_attendance_override`
   opted in (checked at runtime, not a blanket grant)
+- `modules/fees` — fee_structures/discounts/invoices/invoice_line_items/credit_notes/payments/
+  payment_audit_log/refunds/student_credit_ledger_entries (the last is an addition, see that
+  entity file). Invoice generation applies attendance-based proration (`per_class_deduction`:
+  fee ÷ held sessions × absences) and discounts, and consumes available student credit.
+  Invoices are immutable — corrections only via `credit_notes`. Payments are idempotent via a
+  client-generated key; a gateway payment only confirms via webhook, never the client response.
+  `PaymentGatewayAdapter` is a real interface with `MockPaymentGatewayAdapter` as the only
+  registered implementation (no real gateway account exists for this project) — its webhook
+  HMAC-signature verification is real, tested logic, not a stub
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging
-- Five migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Six migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
-  (`attendance.mark`/`attendance.read` grants) — see docs/06 §6.2, which grows as each further
-  module ships
+  (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants) — see
+  docs/06 §6.2, which grows as each further module ships
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted
@@ -43,6 +52,10 @@ shape identical across every endpoint that can return it — `StudentsService.to
 is shared by `getStudentDetail` and `addGuardian` for exactly this reason, and
 `ClassesService.toEnrollmentSummary()` follows the same pattern for `getEnrollments`/
 `enrollStudent`.
+
+Financial endpoints need the raw request body for webhook signature verification (docs/04 §4.4
+gateway webhook) — `main.ts` passes `{ rawBody: true }` to `NestFactory.create` so
+`req.rawBody` is available alongside the normally-parsed `req.body`; no other route is affected.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

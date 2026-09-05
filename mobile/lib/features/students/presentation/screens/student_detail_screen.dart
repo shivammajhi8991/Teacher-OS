@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
+import '../../../fees/domain/entities/invoice_summary.dart';
+import '../../../fees/presentation/providers/fees_providers.dart';
+import '../../../fees/presentation/widgets/record_payment_dialog.dart';
 import '../../domain/entities/guardian_info.dart';
 import '../../domain/entities/guardian_input.dart';
 import '../../domain/entities/student_detail.dart';
@@ -10,8 +13,10 @@ import '../../domain/entities/teacher_assignment_info.dart';
 import '../providers/students_providers.dart';
 import 'student_form_screen.dart';
 
-/// docs/08 §8.2 "Student detail" — profile, guardians, teacher assignments. Attendance/fee/notes
-/// sections join once those modules ship (docs/07 steps 5–7); this shows what exists today.
+/// docs/08 §8.2 "Student detail" — profile, guardians, teacher assignments, and (docs/08 §8.4)
+/// the Fees section: "Teacher opens student → sees pending amount → records payment → receipt."
+/// A per-student attendance-history view is a documented follow-up — the backend endpoint exists
+/// (GET /students/:id/attendance) but no screen consumes it yet; notes join once that module ships.
 class StudentDetailScreen extends ConsumerWidget {
   const StudentDetailScreen({super.key, required this.studentId});
 
@@ -146,6 +151,8 @@ class StudentDetailScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
+              _FeesSection(studentId: studentId),
+              const SizedBox(height: 16),
               _Section(
                 title: 'Guardians',
                 trailing: TextButton.icon(
@@ -244,6 +251,81 @@ class _GuardianTile extends StatelessWidget {
         if (guardian.phone != null) guardian.phone!,
       ].join(' · ')),
       trailing: guardian.isPrimary ? const Chip(label: Text('Primary')) : null,
+    );
+  }
+}
+
+class _FeesSection extends ConsumerWidget {
+  const _FeesSection({required this.studentId});
+
+  final String studentId;
+
+  Future<void> _openRecordPayment(BuildContext context, WidgetRef ref, InvoiceSummary invoice) async {
+    final recorded = await showDialog<bool>(
+      context: context,
+      builder: (_) => RecordPaymentDialog(invoice: invoice),
+    );
+    if (recorded == true) ref.invalidate(studentInvoicesProvider(studentId));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final invoicesAsync = ref.watch(studentInvoicesProvider(studentId));
+
+    return _Section(
+      title: 'Fees',
+      child: invoicesAsync.when(
+        loading: () => const LoadingView(),
+        error: (error, stackTrace) => Text(error.toString()),
+        data: (result) => result.fold(
+          (failure) => Text(failure.message),
+          (invoices) => invoices.isEmpty
+              ? const Text('No invoices yet.')
+              : Column(
+                  children: [
+                    for (final invoice in invoices)
+                      _InvoiceTile(
+                        invoice: invoice,
+                        onRecordPayment: invoice.amountDue > 0
+                            ? () => _openRecordPayment(context, ref, invoice)
+                            : null,
+                      ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InvoiceTile extends StatelessWidget {
+  const _InvoiceTile({required this.invoice, this.onRecordPayment});
+
+  final InvoiceSummary invoice;
+  final VoidCallback? onRecordPayment;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (invoice.status) {
+      'paid' => Colors.green.shade600,
+      'overdue' => Theme.of(context).colorScheme.error,
+      'partial' => Colors.orange.shade700,
+      _ => Theme.of(context).colorScheme.onSurfaceVariant,
+    };
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text('${invoice.billingPeriodStart} – ${invoice.billingPeriodEnd}'),
+      subtitle: Text(
+        'Due ${invoice.dueDate} · ${invoice.currency} ${invoice.totalAmount.toStringAsFixed(2)} '
+        '(paid ${invoice.paidTotal.toStringAsFixed(2)})',
+      ),
+      trailing: onRecordPayment != null
+          ? TextButton(onPressed: onRecordPayment, child: const Text('Record payment'))
+          : Chip(
+              label: Text(invoice.status, style: TextStyle(color: color, fontSize: 12)),
+              visualDensity: VisualDensity.compact,
+              side: BorderSide.none,
+            ),
     );
   }
 }

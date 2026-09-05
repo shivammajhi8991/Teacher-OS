@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4, steps 1–5)
+## Implemented so far (docs/07 Phase 4, steps 1–6)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -49,6 +49,15 @@ inventory and flows this scaffold implements.
   `core/sync` and optimistically merges the marks into the cached roster immediately. Deferred
   (documented in docs/07-roadmap.md's Phase 4 step 5 entry): a mobile history/percentage-view
   screen — the backend endpoint exists and is usable, no screen consumes it yet
+- `features/fees` — the Fee Collection flow (docs/08 §8.4), added as a **Fees section on the
+  existing Student Detail screen** rather than a separate screen or tab, matching how the spec
+  actually describes the flow ("Teacher opens student → sees pending amount → records payment →
+  receipt"). `RecordPaymentDialog` pre-fills the pending amount and offers Cash/UPI/Bank Transfer
+  as single-tap chips. Deferred, documented in docs/07-roadmap.md's Phase 4 step 6 entry:
+  fee-structure/discount/invoice-generation management UI, gateway payment UI, refund UI, and
+  the institute revenue-summary UI — the Teacher dashboard's Fees *tab* still shows "coming soon"
+  for this reason (an aggregate fee-overview screen wasn't built this pass; fee collection today
+  happens per-student via the Fees section)
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher; the rest still show "coming soon")

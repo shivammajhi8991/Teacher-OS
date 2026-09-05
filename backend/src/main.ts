@@ -6,7 +6,10 @@ import { AppModule } from './app.module';
 import { AppConfig } from './config/configuration';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true — docs/04 §4.4 gateway webhook needs the exact request bytes for HMAC signature
+  // verification (fees/gateway/*.adapter.ts); Nest exposes them as `req.rawBody` alongside the
+  // normally JSON-parsed `req.body`, so no other route is affected.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService<AppConfig, true>);
 
   app.use(helmet()); // docs/04 §4.8

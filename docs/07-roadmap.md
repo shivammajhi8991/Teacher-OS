@@ -110,7 +110,47 @@ Build order, each step shippable and testable before the next starts:
    Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
    green (36 tests, 7 new). Mobile hand-verified for import/path and API-shape correctness only
    — still no Flutter SDK in this environment.
-6. **Fees** — fee structures, invoice generation, offline payment recording, receipts. *(docs/03 §3.7)*
+6. **Fees ✅ implemented** — `backend/src/modules/fees` (fee_structures, discounts, invoices,
+   invoice_line_items, credit_notes, payments, payment_audit_log, refunds, plus
+   student_credit_ledger_entries — an addition beyond docs/03, see that entity file for why an
+   append-only ledger replaces a mutable balance column) and, on mobile, a **Fees section added
+   to the existing Student Detail screen** (docs/08 §8.4's actual described flow: "Teacher opens
+   student → sees pending amount → records payment → receipt") rather than a separate screen.
+   Invoices are immutable once issued — corrections only ever go through `credit_notes`, never an
+   in-place edit. Attendance-based proration (`per_class_deduction`) is real, tested math: fee ÷
+   held sessions in the period × absences deducted, directly delivering docs/01 §1.5's
+   "attendance vs. fee coupling is a policy" requirement. Overpayment resolves to a credit-ledger
+   entry, auto-applied against the student's next generated invoice. Duplicate payment submission
+   is idempotent via a client-generated `idempotencyKey` column (payments aren't naturally
+   upsertable the way attendance is, so this stays a dedicated mechanism rather than folding into
+   attendance's approach — see payment.entity.ts). A gateway payment only ever moves to
+   `confirmed` via the webhook, never the client's initiate/return response, per docs/01 §1.5.
+
+   **Payment gateway — real architecture, no real gateway.** No Razorpay/Stripe account exists
+   for this project, so `PaymentGatewayAdapter` is a real interface (`initiate`,
+   `verifyAndParseWebhook`) with `MockPaymentGatewayAdapter` as the only registered
+   implementation — swapping to a real one later is a one-line DI change in `fees.module.ts`. What
+   the mock fakes: calling out to a real hosted checkout page. What's real and tested: HMAC-SHA256
+   webhook-signature verification against a shared secret, the same mechanism a real gateway
+   actually uses (`mock-payment-gateway.adapter.spec.ts` signs its own payloads and confirms
+   tampered/wrongly-signed/missing-signature ones are all rejected) — so `FeesService`'s webhook
+   reconciliation logic is exercised end-to-end, not just structurally present.
+
+   **Deferred, documented**: fee-structure/discount/invoice-generation management UI, gateway
+   payment UI, refund UI, and the institute revenue-summary UI (all four backend endpoints exist
+   and are usable — `fee-structures`, `discounts`, `invoices/generate`,
+   `institutes/:id/revenue-summary` — no mobile screens consume them yet); partial refunds (only
+   full-amount is supported, docs/03 §3.7 doesn't specify partial handling and refund.entity.ts
+   explains the scope cut); `institute_teacher_payouts` (docs/01 §1.3's institute-collected-fees
+   revenue split — needs a payout-percent config that doesn't exist on any entity yet); scheduled/
+   automatic overdue-status transitions (no cron — an invoice's effective status is instead
+   recomputed opportunistically whenever it's read or a payment/credit-note touches it, which is
+   accurate but means a truly untouched overdue invoice won't flip status until something reads
+   it — acceptable for this pass, a documented gap for a true background job later).
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (47 tests, 11 new — 6 for FeesService's edge cases incl. the proration math, 5 for the
+   webhook signature verification). Mobile hand-verified for import/path and API-shape
+   correctness only — still no Flutter SDK in this environment.
 7. **Notes** — upload, share to student/class, download tracking. *(docs/03 §3.8)*
 8. **Notifications** — FCM wiring, preference center, digest batching. *(docs/02 §2.5, docs/01 §1.3)*
 

@@ -142,12 +142,16 @@ fee_structures
 discounts                    -- scholarships/concessions, per-student or per-class
   id, student_id nullable, class_id nullable, type ('flat'|'percent'), value, reason, approved_by
 
-invoices                     -- IMMUTABLE once status moves past 'draft'
+invoices                     -- IMMUTABLE once issued
   id, student_id, institute_id nullable, teacher_profile_id,
   billing_period_start, billing_period_end, subtotal, discount_total, late_fee_total, tax_total,
-  total_amount, currency, status ('draft'|'issued'|'paid'|'partial'|'overdue'|'void'),
+  total_amount, currency, status ('issued'|'paid'|'partial'|'overdue'|'void'),
   gstin nullable, hsn_sac_code nullable,     -- optional India tax-compliance fields, docs/01 §1.3
   issued_at, due_date
+
+  -- Revised during implementation: dropped the 'draft' status. Generation issues an invoice
+  -- directly (invoices.service.ts) rather than staging one first — a draft-review workflow
+  -- before issuing is a documented follow-up if a real need for it shows up, not built now.
 
 invoice_line_items
   id, invoice_id, description, amount, source_attendance_id nullable, source_class_id nullable
@@ -170,9 +174,14 @@ refunds
 
 institute_teacher_payouts    -- revenue-split for institute-collected fees (docs/01 §1.3)
   id, institute_id, teacher_profile_id, invoice_id, payout_percent, payout_amount, status, paid_at
+  -- NOT YET IMPLEMENTED (docs/07 Phase 4 step 6) — needs a payout-percent config that doesn't
+  -- exist on any entity yet (Institute/TeacherProfile). Documented gap, not silently dropped.
+
+student_credit_ledger_entries  -- an addition beyond this doc's original sketch, see below
+  id, student_id, amount, source_payment_id nullable, source_invoice_id nullable, note, created_at
 ```
 
-Overpayment resolves as a credit balance on the student's account (a `payments` row exceeding the invoice total leaves the excess visible as `student_credit_balance`, consumable against the next invoice) rather than an error state — matches real cash-collection behavior where a parent hands over a round number.
+Overpayment resolves as a credit balance on the student's account rather than an error state — matches real cash-collection behavior where a parent hands over a round number. **Implemented as an append-only ledger** (`student_credit_ledger_entries`, balance = SUM(amount) for a student) rather than a single mutable `student_credit_balance` column — this doc originally described the concept without naming a table; the ledger form matches this schema's audit-everywhere convention (every credit grant and every consumption is its own dated, attributable row) instead of a value that could silently drift. A credit is granted when a payment overpays its invoice and auto-consumed (as a negative entry) the next time an invoice is generated for that student, up to what's available.
 
 ## 3.8 Notes, assignments, communication, calendar
 

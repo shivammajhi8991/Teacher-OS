@@ -186,8 +186,11 @@ Overpayment resolves as a credit balance on the student's account rather than an
 ## 3.8 Notes, assignments, communication, calendar
 
 ```
-documents
-  id, institute_id, uploaded_by, title, file_url, file_type, folder_id nullable,
+documents  -- implemented: folder_name (plain string tag) instead of folder_id (a full folders
+             -- table with hierarchy) — spec §7's "categories/folders" reads as a light
+             -- organizational aid, not nested folders, so a string is the honest amount of
+             -- structure for this pass; promoting it to a real Folder entity later is additive.
+  id, institute_id, uploaded_by, title, file_url, file_type, folder_name nullable,
   expiry_date nullable, version, previous_version_id nullable
 
 document_shares
@@ -196,6 +199,8 @@ document_shares
 
 document_access_log          -- "file access tracking where possible" from spec
   id, document_id, accessed_by, accessed_at, action ('view'|'download')
+  -- implemented: every access currently logs as 'download' — no separate "view" endpoint exists
+  -- yet (GET /documents/:id/file is the only content-access route), a documented simplification.
 
 assignments
   id, class_id nullable, student_id nullable, teacher_profile_id, title, description,

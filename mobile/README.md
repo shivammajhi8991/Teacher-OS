@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4, steps 1–6)
+## Implemented so far (docs/07 Phase 4, steps 1–7)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -31,7 +31,8 @@ inventory and flows this scaffold implements.
 - `features/onboarding` — category grid (loaded from the backend) → progressive profile form
   (Basics / Teaching details / Fees & availability, per docs/08 §8.5) via a `Stepper`; a fresh
   teacher registration is routed here explicitly before landing on the dashboard. Document
-  upload for verification is deferred (needs the presigned-URL flow that ships with Notes)
+  upload for verification is still deferred here — the presigned-URL flow it needs now exists
+  on the backend (it shipped with Notes, step 7 below), this screen just doesn't call it yet
 - `features/students` — list (status/search filters), add (with an optional inline guardian,
   per spec §3), detail (edit/archive/add-guardian), and an invite-code dialog; wired into the
   Teacher dashboard's Students tab (`RoleDashboardScaffold.tabBuilders`)
@@ -58,6 +59,15 @@ inventory and flows this scaffold implements.
   the institute revenue-summary UI — the Teacher dashboard's Fees *tab* still shows "coming soon"
   for this reason (an aggregate fee-overview screen wasn't built this pass; fee collection today
   happens per-student via the Fees section)
+- `features/notes` — a **Notes section on the existing Class Detail screen**, scoped to
+  **link-type notes only** (documented in docs/07-roadmap.md's Phase 4 step 7 entry): a real
+  file-upload/download UI needs `file_picker` and a way to open/preview a file on-device,
+  neither pulled into this pass as a new pubspec dependency. "Add link" creates a `link`
+  document tagged `folderName = classId` and shares it with the class in one dialog (title +
+  URL, ≤3 taps); the section lists it back by filtering `GET /documents` client-side on that
+  same tag — a listing convenience only, not the access-control boundary (that's still the
+  `document_shares` row the same call creates). A link is copy-to-clipboard, not tap-to-open (no
+  `url_launcher` dependency yet)
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher; the rest still show "coming soon")

@@ -3,6 +3,8 @@ backend/node_modules/
 backend/dist/
 backend/.env
 backend/*.log
+# LocalDiskStorageAdapter's dev/local-only file store (notes/storage/) — never real content
+backend/uploads/
 
 # Flutter / mobile
 mobile/.dart_tool/

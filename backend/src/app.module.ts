@@ -12,6 +12,7 @@ import { StudentsModule } from './modules/students/students.module';
 import { ClassesModule } from './modules/classes/classes.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { FeesModule } from './modules/fees/fees.module';
+import { NotesModule } from './modules/notes/notes.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -43,6 +44,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     ClassesModule,
     AttendanceModule,
     FeesModule,
+    NotesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

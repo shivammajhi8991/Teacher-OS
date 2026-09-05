@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/failure.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
 import '../../../attendance/presentation/screens/quick_attendance_screen.dart';
+import '../../../notes/domain/entities/document_summary.dart';
+import '../../../notes/presentation/providers/notes_providers.dart';
+import '../../../notes/presentation/widgets/add_link_note_dialog.dart';
 import '../../../students/domain/entities/student.dart';
 import '../../../students/presentation/providers/students_providers.dart';
 import '../../domain/entities/enrollment_summary.dart';
@@ -167,6 +171,8 @@ class ClassDetailScreen extends ConsumerWidget {
                 classId: classId,
                 onEnroll: (enrolled) => _openEnrollDialog(context, ref, enrolled),
               ),
+              const SizedBox(height: 16),
+              _NotesSection(classId: classId),
             ],
           ),
         ),
@@ -340,6 +346,83 @@ class _EnrollmentTile extends StatelessWidget {
       leading: const Icon(Icons.person_outline),
       title: Text(enrollment.studentFullName),
       trailing: Chip(label: Text(enrollment.status), visualDensity: VisualDensity.compact),
+    );
+  }
+}
+
+/// docs/07 roadmap "Notes" — link-only in this pass, see add_link_note_dialog.dart for why.
+class _NotesSection extends ConsumerWidget {
+  const _NotesSection({required this.classId});
+
+  final String classId;
+
+  Future<void> _addLink(BuildContext context, WidgetRef ref) async {
+    final added = await showDialog<bool>(
+      context: context,
+      builder: (_) => AddLinkNoteDialog(classId: classId),
+    );
+    if (added == true) {
+      ref.invalidate(classLinkNotesProvider(classId));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notesAsync = ref.watch(classLinkNotesProvider(classId));
+
+    return _Section(
+      title: 'Notes',
+      trailing: TextButton.icon(
+        onPressed: () => _addLink(context, ref),
+        icon: const Icon(Icons.add_link, size: 18),
+        label: const Text('Add link'),
+      ),
+      child: notesAsync.when(
+        loading: () => const LoadingView(),
+        error: (error, stackTrace) => const Text('Could not load notes.'),
+        data: (result) => result.fold(
+          (failure) => Text(failure.message),
+          (notes) => notes.isEmpty
+              ? const EmptyState(message: 'No notes shared with this class yet.')
+              : Column(children: [for (final n in notes) _NoteTile(note: n)]),
+        ),
+      ),
+    );
+  }
+}
+
+class _NoteTile extends StatelessWidget {
+  const _NoteTile({required this.note});
+
+  final DocumentSummary note;
+
+  Future<void> _copyLink(BuildContext context) async {
+    if (note.externalUrl == null) return;
+    await Clipboard.setData(ClipboardData(text: note.externalUrl!));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Link copied.')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(note.isLink ? Icons.link : Icons.insert_drive_file_outlined),
+      title: Text(note.title),
+      subtitle: note.isLink
+          ? Text(note.externalUrl ?? '', maxLines: 1, overflow: TextOverflow.ellipsis)
+          : const Text("Can't be opened in the app yet"),
+      trailing: note.isExpired
+          ? const Chip(label: Text('Expired'), visualDensity: VisualDensity.compact)
+          : note.isLink
+              ? IconButton(
+                  icon: const Icon(Icons.copy, size: 20),
+                  tooltip: 'Copy link',
+                  onPressed: () => _copyLink(context),
+                )
+              : null,
     );
   }
 }

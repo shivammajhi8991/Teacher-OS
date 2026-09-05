@@ -151,7 +151,55 @@ Build order, each step shippable and testable before the next starts:
    green (47 tests, 11 new — 6 for FeesService's edge cases incl. the proration math, 5 for the
    webhook signature verification). Mobile hand-verified for import/path and API-shape
    correctness only — still no Flutter SDK in this environment.
-7. **Notes** — upload, share to student/class, download tracking. *(docs/03 §3.8)*
+7. **Notes ✅ implemented** — `backend/src/modules/notes` (documents, document_shares,
+   document_access_log) and, on mobile, a **Notes section added to the existing Class Detail
+   screen** rather than a new tab. `folderName` is a plain string tag (docs/03 §3.8 sketched a
+   full `folder_id` hierarchy; a light organizational string is the honest amount of structure
+   for spec §7's "categories/folders" ask — promoting it to a real Folder entity is additive
+   later). Versioning is a self-referential `previousVersion` link with an ownership check (you
+   can only version your own document); every download is logged to `document_access_log`
+   (every access currently logs as `download` — no separate "view" endpoint exists yet, a
+   documented simplification). Access resolution has three independent paths — resource owner,
+   institute-admin same-institute scope, and a matching `document_shares` row — and shares
+   themselves resolve against one of three target kinds (student/class/institute), each walking
+   the same guardian-link/teacher-assignment/enrollment relations already used elsewhere in this
+   codebase for "does this person have a legitimate reason to see this resource" checks.
+   `allowDownload` on a share is a separate, stricter gate than plain read access: a share can
+   let someone see a document exists (`GET /documents`, `GET /documents/:id`) without letting
+   them pull the bytes (`GET /documents/:id/file`) — exercised directly in
+   `notes.service.spec.ts`. An expired document (past `expiryDate`) is rejected with 410 Gone at
+   the file-content step, never at listing.
+
+   **File storage — real interface, no real cloud account.** No S3/GCS account exists for this
+   project, so `StorageAdapter` (`createPresignedUpload`, `objectExists`, `readObject`,
+   `writeObject`, `deleteObject`) is a real interface with `LocalDiskStorageAdapter` as the only
+   registered implementation — swapping to a real one later is a one-line DI change in
+   `notes.module.ts`. Object keys are always server-generated (`randomUUID()`), never derived
+   from client input, so the local adapter is path-traversal-safe by construction. One real
+   behavioral difference from a genuine cloud presigned URL, documented in the adapter: this
+   local stand-in's "upload URL" points back at this same API and still requires the caller's
+   normal JWT, where a real S3 presigned PUT would accept an anonymous request — and it doesn't
+   check that the uploader is the same person who requested that specific `objectKey`, a gap
+   worth closing before this local-disk path is used past single-node dev/local deployment.
+   `externalUrl` on `DocumentSummary` is populated only for `fileType: 'link'` documents — an
+   addition beyond the original response shape, so a client can read a shared link straight off
+   the list/get response instead of following `GET /documents/:id/file`'s redirect just to
+   recover a URL.
+
+   **Deferred, documented**: real file upload/download UI on mobile — `file_picker` and a way to
+   open/preview a downloaded file both need new pubspec dependencies not yet pulled into this
+   pass, so the mobile Notes feature is scoped to **link-type notes only**: "Add link" on Class
+   Detail creates a `link` document tagged with `folderName = classId` and shares it with the
+   class in one dialog (title + URL, ≤3 taps per spec §11), and the section lists it back by
+   filtering `GET /documents` client-side on that same tag (a client-side convention for *listing
+   the teacher's own view*, not a security boundary — the actual grant is still the
+   `document_shares` row created alongside it). A link's URL is copy-to-clipboard, not
+   tap-to-open (no `url_launcher` dependency yet). Folder/version management UI, and a
+   student/parent-facing Notes list, are likewise not built yet — the backend supports all of it.
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (65 tests, 18 new — access resolution for all three share-target kinds, the
+   allowDownload gate, expiry rejection, and version-ownership). Mobile hand-verified for
+   import/path and API-shape correctness only — still no Flutter SDK in this environment.
 8. **Notifications** — FCM wiring, preference center, digest batching. *(docs/02 §2.5, docs/01 §1.3)*
 
 Each MVP step ships with: backend module + migration, Flutter feature (data/domain/presentation), unit + widget tests, and — for steps 3, 5, 6 — the integration test named in docs/05 §5.7.

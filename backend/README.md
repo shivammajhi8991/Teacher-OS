@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4, steps 1–6)
+## Implemented so far (docs/07 Phase 4, steps 1–7)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
@@ -36,13 +36,23 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   `PaymentGatewayAdapter` is a real interface with `MockPaymentGatewayAdapter` as the only
   registered implementation (no real gateway account exists for this project) — its webhook
   HMAC-signature verification is real, tested logic, not a stub
+- `modules/notes` — documents/document_shares/document_access_log: upload-url → confirm →
+  share flow, versioning (self-referential `previousVersion`, owner-only), and download
+  tracking. Three independent read-access paths (owner, same-institute admin, matching share)
+  plus a stricter `allowDownload` gate in front of actual file bytes; shares resolve against
+  student/class/institute targets by walking the same guardian-link/assignment/enrollment
+  relations used elsewhere. `StorageAdapter` is a real interface with `LocalDiskStorageAdapter`
+  as the only registered implementation (no S3/GCS account exists for this project) — object
+  keys are always server-generated (`randomUUID()`), never derived from client input, so it's
+  path-traversal-safe by construction. `folder_name` is a plain string tag, not a full
+  folders/hierarchy table — see docs/03 §3.8
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging
-- Six migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Seven migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
-  (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants) — see
-  docs/06 §6.2, which grows as each further module ships
+  (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
+  (`note.manage`/`note.read` grants) — see docs/06 §6.2, which grows as each further module ships
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted

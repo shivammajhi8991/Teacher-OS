@@ -41,6 +41,7 @@ import {
 } from '../attendance/entities/attendance-record.entity';
 import { User } from '../users/entities/user.entity';
 import { TeacherProfilesService } from '../teacher-profiles/teacher-profiles.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
 import { CreateDiscountDto } from './dto/create-discount.dto';
@@ -116,6 +117,7 @@ export class FeesService {
     @InjectRepository(AttendanceRecord)
     private readonly attendanceRecordRepo: Repository<AttendanceRecord>,
     private readonly teacherProfilesService: TeacherProfilesService,
+    private readonly notificationsService: NotificationsService,
     @Inject(PAYMENT_GATEWAY_ADAPTER)
     private readonly gateway: PaymentGatewayAdapter,
   ) {}
@@ -382,6 +384,17 @@ export class FeesService {
       );
     }
 
+    // docs/01 §1.3 notification digesting example — "a new invoice" is informational, not
+    // critical, so this defaults to a daily digest rather than an immediate push (see
+    // notifications.constants.ts's DEFAULT_CHANNEL_BY_CATEGORY).
+    await this.notifyStudentParty(
+      student.id,
+      'invoice_issued',
+      'New invoice issued',
+      `${cls.name}: ${feeStructure.currency} ${Number(saved.totalAmount).toFixed(2)} due ${dto.dueDate}`,
+      { invoiceId: saved.id },
+    );
+
     return saved;
   }
 
@@ -463,6 +476,18 @@ export class FeesService {
     });
     const saved = await this.paymentRepo.save(payment);
     await this.recomputeInvoiceStatus(invoice);
+
+    // docs/01 §1.3 "real-time for critical (... payment confirmation)" — 'payment' defaults to
+    // an immediate push (see notifications.constants.ts's DEFAULT_CHANNEL_BY_CATEGORY); a
+    // recipient who's explicitly chosen a digest for this category still gets one instead — the
+    // default is what encodes "critical", not a bypass of their preference.
+    await this.notifyStudentParty(
+      invoice.student.id,
+      'payment_confirmed',
+      'Payment received',
+      `${invoice.currency} ${Number(dto.amount).toFixed(2)} received for ${invoice.billingPeriodStart} – ${invoice.billingPeriodEnd}`,
+      { invoiceId: invoice.id, paymentId: saved.id },
+    );
     return saved;
   }
 
@@ -546,6 +571,13 @@ export class FeesService {
 
     if (payment.status === PaymentStatus.CONFIRMED) {
       await this.recomputeInvoiceStatus(payment.invoice);
+      await this.notifyStudentParty(
+        payment.invoice.student.id,
+        'payment_confirmed',
+        'Payment received',
+        `${payment.invoice.currency} ${Number(payment.amount).toFixed(2)} received for ${payment.invoice.billingPeriodStart} – ${payment.invoice.billingPeriodEnd}`,
+        { invoiceId: payment.invoice.id, paymentId: payment.id },
+      );
     }
   }
 
@@ -862,5 +894,47 @@ export class FeesService {
       },
     });
     return !!guardianLink;
+  }
+
+  // ---------------------------------------------------------------- Notifications -------------
+
+  // The student's own login (if they have one, docs/03 §3.4 — a minor may not) plus every linked
+  // guardian's login (if that guardian has one, docs/03 §3.4 — most are added with contact
+  // details only). A student notification-worthy event goes to everyone who'd actually want to
+  // know, not just whichever one of them happens to hold the account.
+  private async getNotifiableUserIds(studentId: string): Promise<string[]> {
+    const ids = new Set<string>();
+
+    const student = await this.studentRepo.findOne({
+      where: { id: studentId },
+      relations: { user: true },
+      select: { id: true, user: { id: true } },
+    });
+    if (student?.user?.id) ids.add(student.user.id);
+
+    const guardianLinks = await this.guardianLinkRepo.find({
+      where: { student: { id: studentId } },
+      relations: { guardian: { user: true } },
+      select: { id: true, guardian: { id: true, user: { id: true } } },
+    });
+    for (const link of guardianLinks) {
+      if (link.guardian.user?.id) ids.add(link.guardian.user.id);
+    }
+    return Array.from(ids);
+  }
+
+  private async notifyStudentParty(
+    studentId: string,
+    type: string,
+    title: string,
+    body: string,
+    data?: Record<string, unknown>,
+  ): Promise<void> {
+    const userIds = await this.getNotifiableUserIds(studentId);
+    await Promise.all(
+      userIds.map((userId) =>
+        this.notificationsService.notify({ userId, type, title, body, data }),
+      ),
+    );
   }
 }

@@ -3,6 +3,7 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import configuration, { AppConfig } from './config/configuration';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -13,6 +14,7 @@ import { ClassesModule } from './modules/classes/classes.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { FeesModule } from './modules/fees/fees.module';
 import { NotesModule } from './modules/notes/notes.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -36,6 +38,9 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     }),
     // docs/04 §4.3 — global baseline; auth endpoints layer a stricter @Throttle() on top.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // Registered once, here, per Nest's own recommended pattern — @Cron providers can live in
+    // any module (NotificationsScheduler) and are still discovered app-wide.
+    ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     InstitutesModule,
@@ -45,6 +50,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     AttendanceModule,
     FeesModule,
     NotesModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

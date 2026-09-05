@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4, steps 1–7)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
@@ -46,13 +46,25 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   keys are always server-generated (`randomUUID()`), never derived from client input, so it's
   path-traversal-safe by construction. `folder_name` is a plain string tag, not a full
   folders/hierarchy table — see docs/03 §3.8
+- `modules/notifications` — notifications/notification_preferences/device_push_tokens (the
+  last an addition beyond docs/03, see that doc). `notify()` always persists an in-app row
+  regardless of channel; the channel is resolved per (user, category) from a stored preference
+  or a category default (docs/01 §1.3's real-time-for-critical vs. digest-for-informational
+  split). `PushNotificationAdapter` is a real interface with `MockPushNotificationAdapter` as
+  the only registered implementation (no Firebase project exists for this project). Digest
+  batching (`runDigestBatch`) is pure, tested logic triggered by an in-process `@Cron`
+  (`@nestjs/schedule`) rather than a BullMQ repeatable job — no Redis is wired up anywhere in
+  this codebase yet, and docs/02 §2.5 frames BullMQ as a scale concern, not an MVP one. Fees
+  and Notes both call `notify()` as real integration points (payment confirmed/invoice issued,
+  document shared to a student)
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging
-- Seven migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Eight migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
-  (`note.manage`/`note.read` grants) — see docs/06 §6.2, which grows as each further module ships
+  (`note.manage`/`note.read` grants), notifications (no new grants — every route operates on the
+  caller's own data, same as `/auth/me`) — see docs/06 §6.2
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted

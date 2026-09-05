@@ -20,6 +20,7 @@ import { StudentTeacherAssignment } from '../students/entities/student-teacher-a
 import { AttendanceSession } from '../attendance/entities/attendance-session.entity';
 import { AttendanceRecord } from '../attendance/entities/attendance-record.entity';
 import { TeacherProfilesService } from '../teacher-profiles/teacher-profiles.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PAYMENT_GATEWAY_ADAPTER } from './gateway/payment-gateway.adapter';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 
@@ -74,11 +75,17 @@ describe('FeesService', () => {
   const instituteRepo = { findOne: jest.fn() };
   const enrollmentRepo = { find: jest.fn().mockResolvedValue([]) };
   const studentRepo = { findOne: jest.fn() };
-  const guardianLinkRepo = { findOne: jest.fn() };
+  const guardianLinkRepo = {
+    findOne: jest.fn(),
+    find: jest.fn().mockResolvedValue([]),
+  };
   const assignmentRepo = { findOne: jest.fn() };
   const attendanceSessionRepo = { find: jest.fn().mockResolvedValue([]) };
   const attendanceRecordRepo = { count: jest.fn().mockResolvedValue(0) };
   const teacherProfilesService = { findByUserId: jest.fn() };
+  const notificationsService = {
+    notify: jest.fn().mockResolvedValue(undefined),
+  };
   const gateway = { initiate: jest.fn(), verifyAndParseWebhook: jest.fn() };
 
   const teacher: AuthenticatedUser = {
@@ -140,6 +147,7 @@ describe('FeesService', () => {
           useValue: attendanceRecordRepo,
         },
         { provide: TeacherProfilesService, useValue: teacherProfilesService },
+        { provide: NotificationsService, useValue: notificationsService },
         { provide: PAYMENT_GATEWAY_ADAPTER, useValue: gateway },
       ],
     }).compile();
@@ -162,6 +170,8 @@ describe('FeesService', () => {
     creditLedgerRepo.findOne.mockResolvedValue(null);
     attendanceSessionRepo.find.mockResolvedValue([]);
     attendanceRecordRepo.count.mockResolvedValue(0);
+    studentRepo.findOne.mockResolvedValue(null); // getNotifiableUserIds' own lookup, distinct from any per-test override
+    guardianLinkRepo.find.mockResolvedValue([]);
     enrollmentRepo.find.mockResolvedValue([]);
   });
 

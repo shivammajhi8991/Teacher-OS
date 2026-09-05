@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/sync/sync_engine.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/sync_status_chip.dart' as chip;
+import '../../../notifications/presentation/providers/notifications_providers.dart';
+import '../../../notifications/presentation/screens/notification_center_screen.dart';
 
 /// docs/08 §8.7 — the shared region layout (alert zone → today's-classes → summary tiles →
 /// recent activity → bottom nav) every role's dashboard reuses, so the four dashboards stay
@@ -44,6 +46,8 @@ class _RoleDashboardScaffoldState extends ConsumerState<RoleDashboardScaffold> {
   @override
   Widget build(BuildContext context) {
     final syncState = ref.watch(syncEngineProvider);
+    final unreadCountAsync = ref.watch(unreadNotificationCountProvider);
+    final unreadCount = unreadCountAsync.maybeWhen(data: (count) => count, orElse: () => 0);
 
     return Scaffold(
       appBar: AppBar(
@@ -55,9 +59,19 @@ class _RoleDashboardScaffoldState extends ConsumerState<RoleDashboardScaffold> {
           ),
           const SizedBox(width: 8),
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              child: const Icon(Icons.notifications_outlined),
+            ),
             tooltip: 'Notifications',
-            onPressed: () {},
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const NotificationCenterScreen()),
+              );
+              if (!mounted) return;
+              ref.invalidate(unreadNotificationCountProvider);
+            },
           ),
           if (widget.onLogout != null)
             IconButton(
@@ -83,15 +97,18 @@ class _RoleDashboardScaffoldState extends ConsumerState<RoleDashboardScaffold> {
   }
 }
 
-class _DashboardTabContent extends StatelessWidget {
+class _DashboardTabContent extends ConsumerWidget {
   const _DashboardTabContent({required this.summaryTiles});
 
   final List<({String label, String value, IconData icon})> summaryTiles;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return RefreshIndicator(
-      onRefresh: () async {}, // wired once each feature's data layer lands
+      // "Today's classes" and the summary tiles are still static (wired once each feature's own
+      // dashboard-summary endpoint lands) — Recent activity is real, backed by
+      // notificationsListProvider.
+      onRefresh: () async => ref.invalidate(notificationsListProvider),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -122,23 +139,71 @@ class _DashboardTabContent extends StatelessWidget {
             children: [for (final tile in summaryTiles) _SummaryTile(tile: tile)],
           ),
           const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Recent activity', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  const EmptyState(
-                    icon: Icons.notifications_none,
-                    message: 'Nothing new yet.',
+          const _RecentActivityCard(),
+        ],
+      ),
+    );
+  }
+}
+
+/// docs/08 §8.7 layout diagram: "Recent activity / notifications feed │ ← last 5, 'see all' →
+/// notif center."
+class _RecentActivityCard extends ConsumerWidget {
+  const _RecentActivityCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notificationsAsync = ref.watch(notificationsListProvider);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Recent activity', style: Theme.of(context).textTheme.titleMedium),
+                TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NotificationCenterScreen()),
                   ),
-                ],
+                  child: const Text('See all'),
+                ),
+              ],
+            ),
+            notificationsAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(),
+              ),
+              error: (_, __) => const EmptyState(icon: Icons.notifications_none, message: 'Nothing new yet.'),
+              data: (result) => result.fold(
+                (_) => const EmptyState(icon: Icons.notifications_none, message: 'Nothing new yet.'),
+                (notifications) => notifications.isEmpty
+                    ? const EmptyState(icon: Icons.notifications_none, message: 'Nothing new yet.')
+                    : Column(
+                        children: [
+                          for (final n in notifications.take(5))
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              leading: Icon(
+                                n.isRead ? Icons.notifications_none : Icons.notifications_active_outlined,
+                              ),
+                              title: Text(
+                                n.title,
+                                style: TextStyle(fontWeight: n.isRead ? FontWeight.normal : FontWeight.bold),
+                              ),
+                              subtitle: Text(n.body, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ),
+                        ],
+                      ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

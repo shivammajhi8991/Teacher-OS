@@ -20,6 +20,7 @@ import { AttendanceRecord } from '../attendance/entities/attendance-record.entit
 import { FeesService } from './fees.service';
 import { FeesController } from './fees.controller';
 import { TeacherProfilesModule } from '../teacher-profiles/teacher-profiles.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { PAYMENT_GATEWAY_ADAPTER } from './gateway/payment-gateway.adapter';
 import { MockPaymentGatewayAdapter } from './gateway/mock-payment-gateway.adapter';
 
@@ -46,6 +47,7 @@ import { MockPaymentGatewayAdapter } from './gateway/mock-payment-gateway.adapte
       AttendanceRecord,
     ]),
     TeacherProfilesModule,
+    NotificationsModule,
   ],
   controllers: [FeesController],
   providers: [

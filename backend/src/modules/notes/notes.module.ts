@@ -11,6 +11,7 @@ import { StudentTeacherAssignment } from '../students/entities/student-teacher-a
 import { NotesService } from './notes.service';
 import { NotesController } from './notes.controller';
 import { TeacherProfilesModule } from '../teacher-profiles/teacher-profiles.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { STORAGE_ADAPTER } from './storage/storage.adapter';
 import { LocalDiskStorageAdapter } from './storage/local-disk-storage.adapter';
 
@@ -28,6 +29,7 @@ import { LocalDiskStorageAdapter } from './storage/local-disk-storage.adapter';
       StudentTeacherAssignment,
     ]),
     TeacherProfilesModule,
+    NotificationsModule,
   ],
   controllers: [NotesController],
   providers: [

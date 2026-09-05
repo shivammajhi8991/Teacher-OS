@@ -216,9 +216,22 @@ announcements
 
 notifications                -- generated events, fanned out per user via notification_preferences
   id, user_id, type, title, body, data (jsonb), read_at, created_at, delivery_channel
+  -- implemented: added delivered_at (nullable) beyond this sketch — digest batching needs to
+  -- know "already folded into a sent digest push" separately from read_at (a push can be
+  -- delivered and never opened).
 
 notification_preferences
   id, user_id, category, channel ('push'|'email'|'digest_daily'|'digest_weekly'|'off')
+  -- implemented: 'email' is accepted (matches this doc) but not actually delivered — no mail
+  -- adapter exists yet, see notification.entity.ts. `category` is a small, fixed, code-defined
+  -- enum (payment/fee/note/general so far), not an admin-extensible table like
+  -- teacher_categories — see notification-preference.entity.ts.
+
+device_push_tokens            -- addition beyond this doc's sketch: this table doesn't appear
+                               -- above, but real push delivery needs *something* to hold a
+                               -- device's FCM registration token. id, user_id, token (globally
+                               -- unique), platform ('ios'|'android'|'web'), created_at,
+                               -- last_seen_at — see device-push-token.entity.ts.
 
 performance_metric_definitions   -- docs/01 §1.4
   id, teacher_category_id nullable, teacher_profile_id nullable,

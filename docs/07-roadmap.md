@@ -200,7 +200,70 @@ Build order, each step shippable and testable before the next starts:
    green (65 tests, 18 new — access resolution for all three share-target kinds, the
    allowDownload gate, expiry rejection, and version-ownership). Mobile hand-verified for
    import/path and API-shape correctness only — still no Flutter SDK in this environment.
-8. **Notifications** — FCM wiring, preference center, digest batching. *(docs/02 §2.5, docs/01 §1.3)*
+8. **Notifications ✅ implemented** — `backend/src/modules/notifications` (notifications,
+   notification_preferences, device_push_tokens — the last an addition beyond docs/03's sketch,
+   see that doc's note) and, on mobile, a **Notification Center + Preferences screen**, reached
+   from the app bar bell icon every dashboard already had a stubbed-out `onPressed: () {}` for,
+   plus the Dashboard tab's "Recent activity" card (docs/08 §8.7's layout diagram literally
+   names this: "last 5, 'see all' → notif center") — both previously static placeholders, now
+   wired to real data.
+
+   `notify()` always persists an in-app row regardless of channel, so the notification center
+   never depends on push having succeeded. The channel a notification actually uses is resolved
+   per (user, category): the user's own stored preference if they've set one, else a category
+   default — docs/01 §1.3's own example split, `payment` → immediate push (critical), `fee`/
+   `note` → daily digest (informational). Two other modules were wired to call `notify()` as
+   real integration points, not just plumbing nobody exercises: Fees (`payment_confirmed` on
+   both the manual-payment and gateway-webhook-confirmed paths, `invoice_issued` on generation)
+   and Notes (`document_shared`, STUDENT-target shares only — CLASS/INSTITUTE shares can fan out
+   to many recipients, which belongs on an async worker per docs/04 §4.7's "bulk notification
+   fan-out," not a synchronous loop in the request path, so that's a documented deferral, not a
+   silent gap). Both notify a student's own login (if they have one — docs/03 §3.4, a minor may
+   not) and every linked guardian's login that has one, resolved by a small helper duplicated in
+   each calling module (`getNotifiableUserIds`/`notifyStudentParty` in FeesService,
+   `notifyStudentOfShare` in NotesService) rather than shared — the same "each module owns its
+   own access/notify resolution" convention already used for read-access checks.
+
+   A device token is unique across the whole table, not scoped per user: re-registering one
+   already on file under a different user reassigns ownership rather than erroring, matching how
+   a real FCM token behaves (shared device, or a factory-reset-then-re-login under a new
+   account) — and an adapter reporting a token as invalid (uninstalled app, rotated token) prunes
+   it, a real edge case this codebase actually handles and tests, not a hypothetical one.
+
+   **Push delivery — real interface, no real Firebase project.** `PushNotificationAdapter`
+   (`send`) is a real interface with `MockPushNotificationAdapter` as the only registered
+   implementation — no Firebase project exists for this codebase (no google-services.json / APNs
+   keys), so it logs the send and reports every token delivered, none invalid; swapping in a
+   real Admin-SDK-backed adapter later is a one-line DI change in `notifications.module.ts`.
+
+   **Digest batching — in-process cron, not BullMQ.** `NotificationsService.runDigestBatch()` is
+   pure, directly-unit-tested logic (group every still-pending row for a channel by user, send
+   one push per user, mark what was actually delivered); `NotificationsScheduler`'s `@Cron`
+   (`@nestjs/schedule`, a new dependency added this pass) is what actually triggers it daily/
+   weekly. This is a deliberate scope choice, not a shortcut nobody noticed: no Redis is wired up
+   anywhere in this codebase yet (`redisUrl` has been a config placeholder since Phase 1, nothing
+   has ever actually connected to it), and docs/02 §2.5 itself frames BullMQ as a *scale* concern
+   ("move the heaviest module into its own deployable") rather than something MVP correctness
+   needs — moving the trigger to a BullMQ repeatable job later doesn't change `runDigestBatch()`
+   at all.
+
+   **Deferred, documented**: real FCM device-token registration on mobile — it needs
+   `firebase_messaging`/`firebase_core` plus actual platform config (google-services.json, APNs
+   keys) that can't be added or verified in this environment, so `POST /device-tokens` exists and
+   is usable but nothing on mobile calls it yet; a real mail adapter for the `'email'` channel
+   (accepted by the DTO/entity per docs/03, but behaves like `'off'` today — no SMTP/SendGrid
+   account exists, same treatment as every other "no real account" integration in this project);
+   `announcements` (explicitly a Phase 5 Institute/admin-module item per this roadmap, not part
+   of this step); wiring `notify()` into Attendance/Classes (e.g. a cancelled session, a schedule
+   change) — real, natural call sites, intentionally left for whenever those modules' own next
+   pass touches them, rather than bolting them on here as scope creep.
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (80 tests, 15 new for NotificationsService — channel resolution, invalid-token pruning,
+   device reassignment, mark-read semantics, digest grouping — plus updated DI wiring in
+   `fees.service.spec.ts`/`notes.service.spec.ts` for the new dependency). Mobile hand-verified
+   for import/path and API-shape correctness only — still no Flutter SDK in this environment.
+
+Phase 4 (MVP build) is now complete.
 
 Each MVP step ships with: backend module + migration, Flutter feature (data/domain/presentation), unit + widget tests, and — for steps 3, 5, 6 — the integration test named in docs/05 §5.7.
 

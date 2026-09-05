@@ -28,6 +28,7 @@ import { StudentGuardianLink } from '../students/entities/student-guardian-link.
 import { StudentTeacherAssignment } from '../students/entities/student-teacher-assignment.entity';
 import { User } from '../users/entities/user.entity';
 import { TeacherProfilesService } from '../teacher-profiles/teacher-profiles.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { CreateDocumentShareDto } from './dto/create-document-share.dto';
@@ -75,6 +76,7 @@ export class NotesService {
     @InjectRepository(StudentTeacherAssignment)
     private readonly assignmentRepo: Repository<StudentTeacherAssignment>,
     private readonly teacherProfilesService: TeacherProfilesService,
+    private readonly notificationsService: NotificationsService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
   ) {}
 
@@ -163,7 +165,17 @@ export class NotesService {
       sharedWithId: dto.sharedWithId,
       allowDownload: dto.allowDownload ?? true,
     });
-    return this.shareRepo.save(share);
+    const saved = await this.shareRepo.save(share);
+
+    // Only the STUDENT target resolves to a small, known set of recipients (the student + their
+    // guardians) cheaply, in-request. CLASS/INSTITUTE shares can fan out to many people — real
+    // fan-out for those belongs on a BullMQ worker per docs/04 §4.7's "bulk notification
+    // fan-out is async," not a synchronous loop here — so those two are a documented deferral,
+    // not silently skipped.
+    if (dto.sharedWithType === ShareTargetType.STUDENT) {
+      await this.notifyStudentOfShare(dto.sharedWithId, document);
+    }
+    return saved;
   }
 
   async listDocuments(
@@ -543,6 +555,49 @@ export class NotesService {
         message: `No ${type} found with id ${id}`,
       });
     }
+  }
+
+  // docs/01 §1.3 notification digesting example — a shared document is informational, so this
+  // defaults to a daily digest, not an immediate push (notifications.constants.ts's
+  // DEFAULT_CHANNEL_BY_CATEGORY). Notifies the student's own login (if any, docs/03 §3.4 — a
+  // minor may not have one) and every linked guardian's login (if that guardian has one) —
+  // duplicated from FeesService.getNotifiableUserIds/notifyStudentParty rather than shared,
+  // matching this codebase's established "each module owns its own access/notify resolution"
+  // convention (see attendance.service.ts's comment on hasStudentFinanceAccess for the same
+  // rationale applied to read-access checks).
+  private async notifyStudentOfShare(
+    studentId: string,
+    document: Document,
+  ): Promise<void> {
+    const ids = new Set<string>();
+
+    const student = await this.studentRepo.findOne({
+      where: { id: studentId },
+      relations: { user: true },
+      select: { id: true, user: { id: true } },
+    });
+    if (student?.user?.id) ids.add(student.user.id);
+
+    const guardianLinks = await this.guardianLinkRepo.find({
+      where: { student: { id: studentId } },
+      relations: { guardian: { user: true } },
+      select: { id: true, guardian: { id: true, user: { id: true } } },
+    });
+    for (const link of guardianLinks) {
+      if (link.guardian.user?.id) ids.add(link.guardian.user.id);
+    }
+
+    await Promise.all(
+      Array.from(ids).map((userId) =>
+        this.notificationsService.notify({
+          userId,
+          type: 'document_shared',
+          title: 'New document shared',
+          body: document.title,
+          data: { documentId: document.id },
+        }),
+      ),
+    );
   }
 
   private toSummary(document: Document): DocumentSummary {

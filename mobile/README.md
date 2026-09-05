@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4, steps 1–7)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -68,6 +68,19 @@ inventory and flows this scaffold implements.
   same tag — a listing convenience only, not the access-control boundary (that's still the
   `document_shares` row the same call creates). A link is copy-to-clipboard, not tap-to-open (no
   `url_launcher` dependency yet)
+- `features/notifications` — a Notification Center (list, mark-one/mark-all read) and a
+  Preferences screen (per-category channel picker — push/daily digest/weekly digest/off; 'email'
+  is deliberately not offered, since nothing sends it yet). Reached from the app bar bell icon on
+  every dashboard (`role_dashboard_scaffold.dart`'s previously-stubbed `onPressed: () {}`, now
+  wired, with an unread-count badge), and Preferences is reached from the Notification Center's
+  own app bar — not from a Profile/Settings tab, since none of the four dashboards' Profile/
+  Settings tabs have a real screen behind them yet (all still "coming soon"). The Dashboard tab's
+  "Recent activity" card (docs/08 §8.7's own layout diagram: "last 5, 'see all' → notif center")
+  was a static placeholder and is now wired to the same data. Deferred, documented in
+  `notifications_repository.dart`'s header comment: real FCM device-token registration — it
+  needs `firebase_messaging`/`firebase_core` and real platform config (google-services.json,
+  APNs keys) neither addable nor verifiable in this environment, so `POST /device-tokens` exists
+  and works, nothing on mobile calls it yet
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher; the rest still show "coming soon")

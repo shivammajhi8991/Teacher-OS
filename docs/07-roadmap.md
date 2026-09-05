@@ -59,7 +59,30 @@ Build order, each step shippable and testable before the next starts:
    Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
    green (17 tests). Mobile hand-verified for import/path and API correctness only — still no
    Flutter SDK in this environment.
-4. **Classes/batches** — creation, recurrence rules, enrollments, waitlist. *(docs/03 §3.5)*
+4. **Classes/batches ✅ implemented** — `backend/src/modules/classes` (classes,
+   class_schedule_versions, schedule_exceptions, enrollments, waitlist_entries) and
+   `mobile/lib/features/classes` (list/create/edit, schedule builder, live conflict check,
+   roster + enroll/waitlist-fallback). RFC 5545 recurrence via the `rrule` npm package —
+   `utils/schedule-occurrences.util.ts` materializes a schedule version's occurrences for
+   conflict detection, and is unit-tested directly (the highest-value test in this module,
+   since it's pure logic with no DB dependency). Conflict detection covers teacher
+   double-booking and same-institute location clashes over a 14-day window, non-blocking per
+   docs/01 §1.5; **student-schedule-overlap conflict detection is a documented follow-up**
+   (needs cross-referencing every enrolled student's other active enrollments — flagged with a
+   TODO in `ClassesService.getConflicts`, not silently skipped). Capacity enforcement on
+   enrollment suggests the waitlist endpoint by name (`CLASS_AT_CAPACITY`) rather than just
+   failing. Two endpoints were added beyond docs/04 §4.4's original list —
+   `GET /classes/:id/enrollments` and `GET /classes/:id/schedule` — because a class detail view
+   needs to show its roster and current schedule, which the original endpoint list had no way
+   to read back. **Deferred, documented**: mobile UI for schedule *exceptions*
+   (holiday/cancel/reschedule/makeup/extra — the backend endpoint exists and is tested) and for
+   *waitlist management* beyond the single "class is full → add to waitlist?" prompt; multi-
+   timezone-precise conflict comparison (today treats both classes' times as the same wall-clock
+   zone, correct for the overwhelmingly common one-teacher-one-timezone case).
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (29 tests, 5 new for the occurrence-materialization util + 6 for the service). Mobile
+   hand-verified for import/path and API-shape correctness only — still no Flutter SDK in this
+   environment.
 5. **Attendance** — quick-mark screen, bulk marking, edit-with-audit, percentage view. *(docs/03 §3.6, docs/05 offline sync)*
 6. **Fees** — fee structures, invoice generation, offline payment recording, receipts. *(docs/03 §3.7)*
 7. **Notes** — upload, share to student/class, download tracking. *(docs/03 §3.8)*

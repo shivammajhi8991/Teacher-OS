@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4, steps 1–3)
+## Implemented so far (docs/07 Phase 4, steps 1–4)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
@@ -16,18 +16,26 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   student_teacher_assignments/student_merge_log/student_invites: manual add (with inline
   guardians), list/detail (role- and assignment-scoped), update, archive, add-guardian, merge
   (duplicate-record resolution with dedup on reassignment), invite-code generation
+- `modules/classes` — classes/class_schedule_versions/schedule_exceptions/enrollments/
+  waitlist_entries: create/list/update, RFC 5545 schedule versioning (`rrule` package),
+  exceptions (holiday/cancel/reschedule/makeup/extra), enrollment with capacity + waitlist
+  fallback, and a non-blocking conflict-check endpoint (teacher double-booking + same-institute
+  location clashes over a 14-day window — student-schedule-overlap is a documented follow-up)
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging
-- Three migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
-  categories), students (guardians/student tables + `student.manage`/`student.read`
-  permission grants) — see docs/06 §6.2, which grows as each further module ships
+- Four migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+  categories), students (guardians/student tables + `student.manage`/`student.read` grants),
+  classes (schedule/enrollment tables + `class.manage`/`class.read` grants) — see docs/06 §6.2,
+  which grows as each further module ships
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted
 `select` if the entity can be returned to a client — `TeacherProfilesService.findById` and
 `StudentsService`'s `STUDENT_SELECT` are the reference pattern; (2) keep a resource's response
 shape identical across every endpoint that can return it — `StudentsService.toGuardianSummary()`
-is shared by `getStudentDetail` and `addGuardian` for exactly this reason.
+is shared by `getStudentDetail` and `addGuardian` for exactly this reason, and
+`ClassesService.toEnrollmentSummary()` follows the same pattern for `getEnrollments`/
+`enrollStudent`.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

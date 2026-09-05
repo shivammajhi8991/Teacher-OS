@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4, steps 1–3)
+## Implemented so far (docs/07 Phase 4, steps 1–4)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -30,6 +30,14 @@ inventory and flows this scaffold implements.
 - `features/students` — list (status/search filters), add (with an optional inline guardian,
   per spec §3), detail (edit/archive/add-guardian), and an invite-code dialog; wired into the
   Teacher dashboard's Students tab (`RoleDashboardScaffold.tabBuilders`)
+- `features/classes` — list/create/edit, a schedule builder (weekday checkboxes generating an
+  RFC 5545 rule, with the generated string editable directly for daily/monthly/custom cases),
+  a live conflict-check panel, and a roster with enroll / waitlist-on-capacity. Deferred and
+  documented in the file's own header comment: schedule-exceptions UI and full waitlist
+  management (backend endpoints for both exist and are tested). Note: this feature's
+  `presentation/providers` skips the usecase-wrapper layer the other features use — with 9
+  near-identical operations, a wrapper class per action added files with no behavior; see that
+  file's comment for the reasoning and when to add one back
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher; the rest still show "coming soon")

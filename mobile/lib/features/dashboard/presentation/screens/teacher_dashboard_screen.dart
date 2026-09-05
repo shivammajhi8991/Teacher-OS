@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../classes/presentation/screens/class_list_screen.dart';
 import '../../../students/presentation/screens/student_list_screen.dart';
 import '../widgets/role_dashboard_scaffold.dart';
 
@@ -20,7 +21,10 @@ class TeacherDashboardScreen extends ConsumerWidget {
         (icon: Icons.payments_outlined, label: 'Fees'),
         (icon: Icons.more_horiz, label: 'More'),
       ],
-      tabBuilders: {2: (context) => const StudentListScreen()}, // docs/07 Phase 4 step 3
+      tabBuilders: {
+        1: (context) => const ClassListScreen(), // docs/07 Phase 4 step 4
+        2: (context) => const StudentListScreen(), // docs/07 Phase 4 step 3
+      },
       summaryTiles: const [
         (label: 'Total students', value: '0', icon: Icons.people_outline),
         (label: 'Pending fees', value: '₹0', icon: Icons.payments_outlined),

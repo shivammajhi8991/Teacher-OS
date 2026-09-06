@@ -358,3 +358,23 @@ export_jobs
 Backs docs/04 §4.7's async-export pattern for the two report types large enough to warrant it (`GET /reports/attendance`, `GET /reports/fees`) — the per-student report (`GET /reports/students/:id`) is inherently bounded to one record, so it has no job counterpart and stays a plain synchronous GET. `institute_id` is a plain column, not a foreign key with referential integrity — it's a snapshot of the request parameter the job was created with (meaningful only for super_admin drilling into one institute), not a relationship. The generated file is written through the same `common/storage/` `StorageAdapter` Notes/Assignments already share (`object_key` into the same `uploads/` object-key namespace), read back via `GET /export-jobs/:id/file` once `status` is `completed`.
 
 **Implementation note**: docs/04 §4.7 frames this as running "on a BullMQ worker" — no BullMQ/Redis is wired up anywhere in this codebase (the same documented gap as Notifications' digest batching, docs/07 Phase 4 step 8). The job row is created and returned immediately, and the actual work runs via a fire-and-forget async call in the same process right after — genuinely non-blocking and pollable/retryable, satisfying the behavioral contract this doc actually cares about, without pretending to a queue infrastructure this MVP doesn't have.
+
+## 3.12 Student CSV import jobs (docs/04 §4.4/§4.7, an addition beyond this doc's original scope)
+
+```
+student_import_jobs
+  id, requested_by, status ('pending'|'processing'|'completed'|'failed'),
+  total_rows, success_count, failure_count, errors (jsonb array of {row, message}),
+  created_at, completed_at nullable
+```
+
+Backs docs/04 §4.4's `POST /students/import` "CSV, async job" the exact same way §3.11's
+`export_jobs` backs Reports' async path — same reasoning (no BullMQ/Redis, a fire-and-forget
+in-process call right after the job row is created and returned). `errors` is a per-row failure
+list, not a single error field — one malformed row never aborts the rest of the import (docs/04
+§4.7's own "gives every bulk operation a natural retry point if it fails partway"), and the job
+only ends `failed` outright when *every* row failed. Row-level validation reuses
+`CreateStudentDto`'s own class-validator decorators rather than a second hand-rolled check, so a
+bad CSV row and a bad `POST /students` body get identically worded errors. Mobile has no screen
+for this yet — the same missing `file_picker` dependency already documented as the reason
+Notes/Assignments stayed link-only (docs/07 Phase 5 step 7).

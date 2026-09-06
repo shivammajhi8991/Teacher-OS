@@ -38,7 +38,12 @@ inventory and flows this scaffold implements.
   on the backend (it shipped with Notes, step 7 below), this screen just doesn't call it yet
 - `features/students` — list (status/search filters), add (with an optional inline guardian,
   per spec §3), detail (edit/archive/add-guardian), and an invite-code dialog; wired into the
-  Teacher dashboard's Students tab (`RoleDashboardScaffold.tabBuilders`)
+  Teacher dashboard's Students tab (`RoleDashboardScaffold.tabBuilders`). docs/08 §8.2's
+  "Add/invite student" row lists "import CSV" as a third FAB option (Phase 5 step 7) — the
+  backend (`POST /students/import`, multipart) is real and fully usable from any HTTP client, but
+  no mobile screen exists for it: picking a local CSV file needs `file_picker` (or equivalent),
+  the same missing pubspec dependency already documented below as the reason Notes/Assignments
+  stayed link-only, so it's deferred here for the identical reason rather than half-built
 - `features/classes` — list/create/edit, a schedule builder (weekday checkboxes generating an
   RFC 5545 rule, with the generated string editable directly for daily/monthly/custom cases),
   a live conflict-check panel, and a roster with enroll / waitlist-on-capacity. Deferred and

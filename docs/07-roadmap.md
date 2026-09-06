@@ -676,7 +676,60 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    requester doesn't teach correctly rejected with 403; an assignment due date correctly appeared
    as its own `assignment_due` event alongside the class occurrences. Mobile hand-verified for
    import/path and API-shape correctness only — still no Flutter SDK in this environment.
-7. **CSV import** for bulk student onboarding.
+7. **CSV import ✅ implemented (backend); mobile deferred, documented** — `POST
+   /students/import` (multipart, `file` field) + `GET /students/import-jobs/:id`, docs/04 §4.7's
+   async-job pattern applied to bulk student onboarding. Previously deliberately skipped (Phase
+   4 step 3's own note: "the async-job pattern it needs depends on the BullMQ queue that arrives
+   with Notifications" — moot now; Notifications never actually wired up BullMQ either) using the
+   exact fire-and-forget-in-process pattern Reports' `export_jobs` already established (step 5):
+   the job row is created and returned immediately (`202` + `PENDING`), the real work — parsing,
+   per-row validation, and calling `StudentsService.create` for each row — runs right after,
+   in-process.
+
+   **Row-level validation reuses `CreateStudentDto`'s own class-validator decorators**
+   (`plainToInstance` + `validate`, the same two calls Nest's `ValidationPipe` runs internally
+   for a normal request body) rather than a hand-rolled second set of field checks — a malformed
+   CSV row and a malformed `POST /students` body get identically worded errors. One bad row never
+   aborts the rest of the import (docs/04 §4.7 "gives every bulk operation a natural retry point
+   if it fails partway") — the job's `errors` array names the exact row and reason, `successCount`
+   /`failureCount` track the split, and the job only ends `FAILED` outright when *every* row
+   failed.
+
+   **CSV parsing is hand-rolled** (`utils/csv-parser.util.ts`), matching the same
+   "dependency-light for genuinely simple serialization" preference behind Reports' CSV writer —
+   full RFC 4180 double-quote escaping (embedded commas, newlines, doubled-quote-as-literal-quote)
+   with its own dedicated test file. File upload uses `@nestjs/platform-express`'s
+   `FileInterceptor` (Multer, already a transitive dependency — no new package) with a 5MB limit;
+   `@types/multer` was the one addition needed (types only, no runtime dependency).
+
+   **A real bug, caught live testing this exact flow**: `class-validator`'s `ValidationError` is
+   a tree, not a flat list — a failure inside a `@ValidateNested` property (here, the CSV row's
+   optional single guardian, itself validated as `GuardianInputDto`) lands in that error's
+   `children`, not its own `constraints`. Reading only the top-level `constraints` silently
+   dropped every nested-object validation message down to a generic "Invalid row" — a bad
+   `guardianEmail` never said *why* it failed. Fixed with a small recursive
+   `flattenValidationMessages` helper that walks the whole error tree; `email must be an email`
+   now surfaces correctly. A regression test asserts the specific message, not just that *a*
+   failure was recorded.
+
+   **Mobile scope cut, documented — not silently skipped**: docs/08 §8.2's "Add/invite student"
+   row lists "import CSV" as a third FAB option alongside the manual form and invite-code
+   generation, but actually letting a user pick a local CSV file needs `file_picker` (or
+   equivalent), the exact same missing pubspec dependency already documented as the reason
+   Notes/Assignments stayed link-only in Phase 4 step 7 / Phase 5 step 1. No mobile screen is
+   built this pass for the same reason — the backend endpoint is real and fully usable (a
+   teacher/admin can already drive it via any HTTP client, e.g. `curl -F file=@students.csv`),
+   there's simply no in-app file picker yet to hand it a file from.
+
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (213 tests, 17 new); `npm run test:e2e` 7/7; migration applied cleanly against live
+   Postgres. Manually exercised end-to-end against real Postgres: a real multipart CSV upload (4
+   data rows — two valid with an inline guardian, one missing `fullName`, one with an invalid
+   guardian email) correctly returned `202` + `PENDING` with `totalRows: 4`, then polled to
+   `COMPLETED` with `successCount: 2`/`failureCount: 2` and the two specific per-row error
+   messages; the two successful rows confirmed as real students with their guardian correctly
+   linked (phone/email intact); a second teacher correctly rejected (403) from reading the first
+   teacher's import job; an import request with no file attached correctly rejected (400).
 8. **Admin web panel** (Flutter Web target, docs/02 §2.8).
 
 ## Phase 6 — Testing & production deployment

@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–7)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
   links a freshly-registered `parent` account to any existing `Guardian` row sharing their
@@ -27,7 +27,14 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   (duplicate-record resolution with dedup on reassignment), invite-code generation. `findAll`
   (backing `GET /students`) gained a real `parent` branch in Phase 5 step 3 — previously a
   parent caller silently fell through to the teacher branch and got an empty list every time,
-  with no way to discover their own linked children's ids at all
+  with no way to discover their own linked children's ids at all. Phase 5 step 7 added
+  `student_import_jobs` + `POST /students/import` (multipart CSV upload via
+  `@nestjs/platform-express`'s `FileInterceptor`/Multer, already a transitive dependency) and
+  `GET /students/import-jobs/:id` — docs/04 §4.7's async-job pattern (fire-and-forget in-process,
+  same as Reports' `export_jobs`) applied to bulk onboarding, previously deliberately skipped
+  pending a BullMQ queue that never actually arrived. Row-level validation reuses
+  `CreateStudentDto`'s own class-validator decorators; one bad row never aborts the rest of the
+  import. CSV parsing is hand-rolled (`utils/csv-parser.util.ts`, full RFC 4180 quote-escaping)
 - `modules/classes` — classes/class_schedule_versions/schedule_exceptions/enrollments/
   waitlist_entries: create/list/update, RFC 5545 schedule versioning (`rrule` package),
   exceptions (holiday/cancel/reschedule/makeup/extra), enrollment with capacity + waitlist
@@ -141,7 +148,7 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   server-generated (`randomUUID()`), never derived from client input, so it's path-traversal-safe
   by construction; each module keeps its own upload-bytes controller route and `main.ts`
   raw-body registration under its own resource path
-- Thirteen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Fourteen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
@@ -154,8 +161,9 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   `announcements`, `institute_teacher_payouts` tables, plus `branch.manage`/
   `teacher_invite.manage`/`teacher_invite.redeem`/`announcement.manage`/`announcement.read`/
   `payout.manage`/`payout.read` grants), reports (`export_jobs` table, `report.generate` grant),
-  and calendar (no new tables — see calendar.service.ts's header comment — just a
-  `calendar.read` grant) — see docs/06 §6.2. All thirteen have now run end-to-end against a real
+  calendar (no new tables — see calendar.service.ts's header comment — just a `calendar.read`
+  grant), and student-import (`student_import_jobs` table, no new grant — gated by the existing
+  `student.manage`) — see docs/06 §6.2. All fourteen have now run end-to-end against a real
   Postgres instance (see "Local setup" below).
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
@@ -232,6 +240,16 @@ request; fixed with the interop-safe `import PDFDocument = require('pdfkit')` fo
 `AssignmentSubmission.grade` hit in step 2 (TypeORM's reflection-based inference reports `Object`
 for a nullable-string union, which Postgres rejects at `migration:run`). Caught live running this
 step's own migration; fixed with `type: 'varchar'`.
+
+Phase 5 step 7 (CSV import) added one more, this time a logic bug rather than a structural one:
+(10) `class-validator`'s `ValidationError` is a tree, not a flat list — a failure inside a
+`@ValidateNested` property (a CSV row's optional guardian, itself validated as
+`GuardianInputDto`) lands in that error's `children`, not its own `constraints`. Reading only the
+top-level `constraints` silently dropped every nested-object validation message down to a
+generic "Invalid row" — a bad `guardianEmail` never said why it failed. Caught live testing the
+actual import flow (a unit test with a real `class-validator` `validate()` call would have caught
+it too, but this one was found via a live multipart upload before the corresponding test was
+strengthened); fixed with a small recursive `flattenValidationMessages` helper.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

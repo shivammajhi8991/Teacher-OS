@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../announcements/presentation/screens/announcements_list_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
+import '../../../calendar/presentation/widgets/calendar_quick_action_card.dart';
 import '../../../institutes/presentation/screens/teacher_roster_screen.dart';
 import '../../../reports/presentation/screens/reports_screen.dart';
 import '../widgets/role_dashboard_scaffold.dart';
@@ -35,7 +36,13 @@ class InstituteAdminDashboardScreen extends ConsumerWidget {
       },
       dashboardExtra: instituteId == null
           ? null
-          : _AnnouncementsQuickAction(instituteId: instituteId),
+          : Column(
+              children: [
+                _AnnouncementsQuickAction(instituteId: instituteId),
+                const SizedBox(height: 12),
+                const CalendarQuickActionCard(), // docs/07 Phase 5 step 6
+              ],
+            ),
       summaryTiles: const [
         (label: 'Total teachers', value: '0', icon: Icons.school_outlined),
         (label: 'Total students', value: '0', icon: Icons.people_outline),

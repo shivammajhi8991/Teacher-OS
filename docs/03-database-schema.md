@@ -304,6 +304,27 @@ calendar_events               -- unifies classes, exams, fee due dates, holidays
   source_id nullable, title, starts_at, ends_at, timezone
 ```
 
+**Implemented (docs/07 Phase 5 step 6) as a live-computed aggregation, not a persisted table.**
+`GET /calendar` materializes `class_occurrence`/`assignment_due`/`fee_due` events at query time
+straight from Classes/Assignments/Fees (`class_schedule_versions`' own RRULE materialization,
+already built for §3.5's conflict-check, is reused directly), the same way every other "unified
+view" in this codebase works (Attendance history's percentage, Fees' revenue summary, Reports) —
+a persisted `calendar_events` row would need write-side sync hooks in three separate modules
+every time a class reschedules, an assignment is created, or an invoice is generated, exactly the
+cross-module coupling this schema's "each module owns its own domain" convention avoids
+elsewhere, and there's no point-in-time/historical need here the way there is for `audit_logs`.
+`owner_type`/`owner_id` are accepted as explicit query params only for `'class'` and an added
+`'institute'` (docs/06 §6.2 grants institute_admin "R (institute)" with nowhere in this sketch's
+enum for that to point, the same class of gap `PLATFORM` filled for `announcements.target_type`)
+— omitted, they resolve to the caller's own calendar server-side (teacher's own classes,
+student's own enrollments, every one of a parent's linked children's, an institute_admin's own
+institute, or platform-wide for super_admin); an explicit `'teacher'`/`'student'` naming someone
+other than the caller is a documented scope cut, not a granted use case per the matrix. `exam`
+and `custom` have no backing data source anywhere in this codebase and aren't invented; `holiday`
+is only partially covered (via per-class `schedule_exceptions`) — layering those onto
+materialized occurrences is a real, documented follow-up, matching the exact simplification
+`ClassesService.getConflicts` already makes for the same underlying reason.
+
 ## 3.9 Offline sync support
 
 ```

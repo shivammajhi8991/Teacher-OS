@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–5)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
   links a freshly-registered `parent` account to any existing `Guardian` row sharing their
@@ -119,6 +119,20 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   this codebase's established convention. The async job path has no BullMQ/Redis behind it (same
   gap as Notifications' digest batching) — the job row is created and returned immediately, and
   the real work runs via a fire-and-forget call in this same process right after
+- `modules/calendar` — a new module (Phase 5 step 6): one `GET /calendar` aggregating
+  `class_occurrence`/`assignment_due`/`fee_due` events live from Classes/Assignments/Fees rather
+  than a persisted `calendar_events` table (docs/03 §3.8's own note explains why — the same
+  "no cross-module write-side sync hooks" reasoning behind every other computed view in this
+  codebase). Scope resolution matches Reports' pattern exactly: omitted, `ownerType`/`ownerId`
+  default to "my own calendar" per role; an explicit `ownerType=class` or the new
+  `ownerType=institute` (an addition beyond docs/03's sketched enum, closing the same class of
+  gap `PLATFORM` closed for Announcements) covers the two other real, bounded lookups this pass
+  supports. Conflict detection reuses `ClassesService.getConflicts`'s own two rules (teacher
+  double-booking, same-institute-location clash) and its `materializeOccurrences` RRULE utility
+  directly (a pure function import, not a service call) — computed as a pairwise overlap check
+  over events already fetched to build the calendar, cheaper than the per-class endpoint's own
+  fresh queries. One `calendar.read` permission for every role (docs/06 §6.2 has no separate
+  verbs here either)
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging, and
   `storage/` — `StorageAdapter`/`LocalDiskStorageAdapter` (no S3/GCS account exists for this
@@ -127,7 +141,7 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   server-generated (`randomUUID()`), never derived from client input, so it's path-traversal-safe
   by construction; each module keeps its own upload-bytes controller route and `main.ts`
   raw-body registration under its own resource path
-- Twelve migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Thirteen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
@@ -139,9 +153,10 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   (`branches.deleted_at`, `teacher_profiles.payout_percent`, `teacher_institute_invites`,
   `announcements`, `institute_teacher_payouts` tables, plus `branch.manage`/
   `teacher_invite.manage`/`teacher_invite.redeem`/`announcement.manage`/`announcement.read`/
-  `payout.manage`/`payout.read` grants), and reports (`export_jobs` table, `report.generate`
-  grant) — see docs/06 §6.2. All twelve have now run end-to-end against a real Postgres instance
-  (see "Local setup" below).
+  `payout.manage`/`payout.read` grants), reports (`export_jobs` table, `report.generate` grant),
+  and calendar (no new tables — see calendar.service.ts's header comment — just a
+  `calendar.read` grant) — see docs/06 §6.2. All thirteen have now run end-to-end against a real
+  Postgres instance (see "Local setup" below).
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted

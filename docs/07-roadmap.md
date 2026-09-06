@@ -624,7 +624,58 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    green (183 tests, 13 new); `npm run test:e2e` 7/7; migration applied cleanly against live
    Postgres. Mobile hand-verified for import/path and API-shape correctness only — still no
    Flutter SDK in this environment.
-6. **Calendar unification** — conflict detection surfaced in UI (docs/03 §3.5).
+6. **Calendar unification ✅ implemented** — a new `backend/src/modules/calendar`: one
+   `GET /calendar?from=&to=&ownerType=&ownerId=` endpoint aggregating `class_occurrence`,
+   `assignment_due`, and `fee_due` events live from Classes/Assignments/Fees rather than a
+   persisted `calendar_events` table (docs/03 §3.8's own note explains why — the same reasoning
+   Reports/Attendance-history/Fees'-revenue-summary already establish in this codebase). Mobile:
+   a shared **Calendar** screen (a week at a time, Prev/Next navigation, events grouped by day)
+   reached from a Dashboard quick action on all four role dashboards — docs/08 §8.2 didn't
+   actually list a Calendar screen for any role before this step, so it was added there first,
+   worded identically ("Dashboard quick action") across Teacher/Student/Parent/Institute Admin
+   per docs/06 §6.2's own Calendar row.
+
+   **Scope resolution matches Reports' established pattern**: omitted, `ownerType`/`ownerId`
+   default to "my own calendar" per role (a teacher's own classes, a student's own active
+   enrollments, every one of a parent's linked children's aggregated together, an
+   institute_admin's own institute, platform-wide for super_admin) — never a client-supplied id
+   for the common case. Two explicit lookups are supported this pass: `ownerType=class` (a
+   documented, bounded case — "this class's calendar," e.g. from a future Class Detail screen)
+   and a new `ownerType=institute` (an addition beyond docs/03's sketched enum, the same class of
+   gap `PLATFORM` filled for Announcements' `target_type` — institute_admin's own "R (institute)"
+   grant needed somewhere to point). An explicit `'teacher'`/`'student'` naming someone other
+   than the caller is a documented scope cut, not part of what docs/06's matrix actually grants.
+
+   **Conflict detection is real, reusing `ClassesService.getConflicts`'s own two rules** (teacher
+   double-booking, same-institute-same-location clash) and its exact `materializeOccurrences`
+   RRULE-expansion utility — imported directly as a pure function (no service-to-service call,
+   consistent with this codebase's convention since it's stateless math, not business logic tied
+   to another module's entities). Computed as a plain pairwise overlap check over whatever
+   `class_occurrence` events are already in hand building the calendar itself, rather than the
+   N-more-queries-per-class the original per-class endpoint does — cheaper precisely because a
+   calendar view has already fetched everything conflict-checking needs. Deliberately does not
+   layer `schedule_exceptions` (holiday/cancelled/rescheduled) onto materialized occurrences —
+   the same simplification `getConflicts` already makes, not a new gap this step introduces.
+
+   One `calendar.read` permission covers the whole module (docs/06 §6.2 has no separate verbs
+   here either); every entity this reads (Classes, Assignments, Fees, Students) is injected by
+   entity directly rather than importing those modules' services, per this codebase's established
+   convention.
+
+   Mobile scope cut, documented: no in-app calendar-grid UI (month view, drag-to-reschedule) —
+   a day-grouped week list with Prev/Next is the honest scope for this pass, matching how other
+   "history" screens in this codebase (Attendance history, Notification center) are lists, not
+   custom canvas widgets.
+
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (196 tests, 13 new); `npm run test:e2e` 7/7; migration applied cleanly against live
+   Postgres. Manually exercised end-to-end against real Postgres: two classes for one teacher
+   scheduled with a genuine 30-minute overlap correctly returned 6 occurrences over one week, all
+   flagged `teacher_double_booking`; a third, non-overlapping class on the same calendar
+   correctly came back `conflict: false`; an explicit `ownerType=class` lookup for a class the
+   requester doesn't teach correctly rejected with 403; an assignment due date correctly appeared
+   as its own `assignment_due` event alongside the class occurrences. Mobile hand-verified for
+   import/path and API-shape correctness only — still no Flutter SDK in this environment.
 7. **CSV import** for bulk student onboarding.
 8. **Admin web panel** (Flutter Web target, docs/02 §2.8).
 

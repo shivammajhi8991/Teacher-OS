@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–5)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -150,6 +150,19 @@ inventory and flows this scaffold implements.
   dependency exists yet, the same "no new pubspec dependency" reasoning behind Notes' link-only
   scope. The async `export-jobs` path (docs/04 §4.7) has no mobile UI this pass — a documented
   scope cut; the direct endpoints already cover this app's real scale
+- `features/calendar` — docs/07-roadmap.md's Phase 5 step 6. One shared `CalendarScreen` — docs/08
+  §8.2 didn't actually list a Calendar screen for any role before this step, so it was added
+  there first (worded identically, "Dashboard quick action," for all four roles). A week at a
+  time (Prev/Next navigation), events grouped by day with an icon per `eventType` and a red
+  "Conflict" chip on any flagged `class_occurrence`; `GET /calendar` scopes to the caller
+  automatically so this sends only a date range, never an owner filter. Wired as a
+  `CalendarQuickActionCard` on the Teacher/Student dashboards' (previously empty)
+  `dashboardExtra` slot, a third `ListTile` in Parent's existing `_DetailLinks` card (the
+  parent-role calendar aggregates every linked child, not just whichever one is selected in the
+  switcher, so this link needs no child id), and a second card alongside Institute Admin's
+  existing Announcements quick action. No calendar-grid/month-view UI this pass — a day-grouped
+  week list is the honest scope, matching how other "history" screens here (Attendance history,
+  Notification center) are lists, not custom canvas widgets
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student, Teachers

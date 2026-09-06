@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../assignments/presentation/screens/student_assignments_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../calendar/presentation/widgets/calendar_quick_action_card.dart';
 import '../widgets/role_dashboard_scaffold.dart';
 
 /// docs/08 §8.1 Student shell, §8.2 Student screen inventory.
@@ -23,6 +24,7 @@ class StudentDashboardScreen extends ConsumerWidget {
       tabBuilders: {
         2: (context) => const StudentAssignmentsScreen(), // docs/07 Phase 5 step 1
       },
+      dashboardExtra: const CalendarQuickActionCard(), // docs/07 Phase 5 step 6
       summaryTiles: const [
         (label: 'Attendance %', value: '—', icon: Icons.fact_check_outlined),
         (label: 'Assignments due', value: '0', icon: Icons.assignment_late_outlined),

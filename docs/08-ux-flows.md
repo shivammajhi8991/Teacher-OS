@@ -42,6 +42,7 @@ Bottom navigation, 4–5 tabs max per role (more than that and the "fast, minima
 | Create assignment | Title, attachments, deadline, target | Assignments list FAB |
 | Review submissions | Per-student submission, feedback, grade | Assignment detail |
 | Reports | Attendance/fee/student report builder, export | More → Reports |
+| Calendar | Unified own-classes/assignment-due view for a date range, with schedule-conflict flags (docs/03 §3.5) | Dashboard quick action |
 | Notification center | List, mark read, deep link to source | App bar bell icon |
 | Notification preferences | Per-category channel toggle | Settings |
 | Verification request | Submit qualification docs | Profile → Verification status |
@@ -60,6 +61,7 @@ Bottom navigation, 4–5 tabs max per role (more than that and the "fast, minima
 | Fee status | Pending/paid history (read-only) | Dashboard |
 | Announcements | From teachers/institute | Notification center |
 | QR check-in | Scan teacher's session QR | Dashboard "today's classes" quick action |
+| Calendar | Unified enrolled-classes/assignment-due/fee-due view for a date range | Dashboard quick action |
 | Profile/settings | Own profile, language, notification prefs | Tab bar |
 
 ### Parent
@@ -72,6 +74,7 @@ Bottom navigation, 4–5 tabs max per role (more than that and the "fast, minima
 | Fees | Pending/paid, pay-online action (if gateway enabled), receipts | Tab bar |
 | Announcements | From child's teachers/institute | Tab bar |
 | Performance | Metric history for the child | Dashboard |
+| Calendar | Unified view across every linked child's classes/assignments/fees due for a date range | Dashboard quick action |
 | Request absence / raise query | Structured request to teacher (never a direct edit, docs/06 §6.3) | Child attendance detail |
 | Notification preferences | Per-category channel + digest frequency | Profile |
 | Profile/settings | Own profile, linked-children management | Tab bar |
@@ -86,6 +89,7 @@ Bottom navigation, 4–5 tabs max per role (more than that and the "fast, minima
 | Students list / detail | Institute-wide view, same detail screen as teacher's (permission-gated fields) | Tab bar |
 | Reports | Institute-scope attendance/fee/revenue reports | Tab bar |
 | Announcements | Institute-wide broadcast | Dashboard quick action |
+| Calendar | Institute-wide class schedule for a date range, with conflict flags | Dashboard quick action |
 | Revenue/payouts | Teacher revenue-split summary | Reports |
 | Settings | Institute profile, admin-attendance-override toggle (docs/06 §6.3), subscription | Tab bar |
 

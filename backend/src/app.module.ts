@@ -19,6 +19,7 @@ import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { PerformanceModule } from './modules/performance/performance.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -59,6 +60,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     PerformanceModule,
     AnnouncementsModule,
     ReportsModule,
+    CalendarModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

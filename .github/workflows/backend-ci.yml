@@ -1,0 +1,82 @@
+name: Backend CI
+
+# docs/07 Phase 6 — "Full integration-test suite green on CI" (docs/05 §5.7). Runs the exact same
+# tsc / eslint / nest build / npm test / npm run test:e2e sequence this project has been verifying
+# manually before every commit throughout Phase 4–5, against a real Postgres service container
+# (not mocked), so this stays true on every push/PR without depending on a developer's own machine.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      # Host port 5432 here (unlike the local dev docker-compose's remapped 5433 — infra's own
+      # comment explains that remap exists only to dodge a locally-installed native Postgres on a
+      # dev machine, which a CI runner never has).
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: teacheros
+          POSTGRES_PASSWORD: teacheros
+          POSTGRES_DB: teacheros
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://teacheros:teacheros@localhost:5432/teacheros
+      JWT_ACCESS_SECRET: ci-access-secret
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: ci-refresh-secret
+      JWT_REFRESH_EXPIRES_IN: 30d
+      REDIS_URL: redis://localhost:6379
+      CORS_ORIGIN: http://localhost:8080
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint (no auto-fix — CI should fail, not silently rewrite files)
+        run: npx eslint "src/**/*.ts" "test/**/*.ts"
+
+      - name: Build
+        run: npm run build
+
+      - name: Run migrations against the live Postgres service
+        run: npm run migration:run
+
+      - name: Unit tests
+        run: npm test
+
+      - name: E2E tests
+        run: npm run test:e2e

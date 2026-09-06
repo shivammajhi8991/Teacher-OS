@@ -1,0 +1,43 @@
+name: Mobile CI
+
+# docs/07 Phase 6 — "Full integration-test suite green on CI" (docs/05 §5.7). This is the first
+# time anything in `mobile/` has ever been run through real Flutter tooling: every module built in
+# Phase 4/5 was hand-verified line-by-line instead, since no Flutter SDK exists in the dev
+# environment this project was built in (confirmed by the complete absence of android/ios/web
+# platform folders — `flutter create` was never run). A GitHub Actions runner has a real SDK, so
+# `flutter analyze`/`flutter test` here are this codebase's actual first compile-check.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: flutter analyze
+        run: flutter analyze
+
+      - name: flutter test
+        run: flutter test

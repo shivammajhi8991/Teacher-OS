@@ -6,6 +6,9 @@ import '../../../../core/widgets/loading_view.dart';
 import '../../../fees/domain/entities/invoice_summary.dart';
 import '../../../fees/presentation/providers/fees_providers.dart';
 import '../../../fees/presentation/widgets/record_payment_dialog.dart';
+import '../../../performance/domain/entities/performance_record.dart';
+import '../../../performance/presentation/providers/performance_providers.dart';
+import '../../../performance/presentation/widgets/record_performance_dialog.dart';
 import '../../domain/entities/guardian_info.dart';
 import '../../domain/entities/guardian_input.dart';
 import '../../domain/entities/student_detail.dart';
@@ -152,6 +155,8 @@ class StudentDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               _FeesSection(studentId: studentId),
+              const SizedBox(height: 16),
+              _PerformanceSection(studentId: studentId),
               const SizedBox(height: 16),
               _Section(
                 title: 'Guardians',
@@ -326,6 +331,66 @@ class _InvoiceTile extends StatelessWidget {
               visualDensity: VisualDensity.compact,
               side: BorderSide.none,
             ),
+    );
+  }
+}
+
+/// docs/01 §1.4 "configurable performance metrics" — a section here, matching the Fees
+/// precedent, rather than a separate screen. Teacher-only (the RBAC matrix gives no other role
+/// write access — docs/06 §6.2); a parent/student-facing read view is docs/08 §8.2's own
+/// separate "Performance | Metric history for the child" item, left for the Parent-dashboard
+/// pass (Phase 5 step 3) rather than built here.
+class _PerformanceSection extends ConsumerWidget {
+  const _PerformanceSection({required this.studentId});
+
+  final String studentId;
+
+  Future<void> _openRecordDialog(BuildContext context, WidgetRef ref) async {
+    final recorded = await showDialog<bool>(
+      context: context,
+      builder: (_) => RecordPerformanceDialog(studentId: studentId),
+    );
+    if (recorded == true) ref.invalidate(studentPerformanceProvider(studentId));
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final recordsAsync = ref.watch(studentPerformanceProvider(studentId));
+
+    return _Section(
+      title: 'Performance',
+      trailing: TextButton.icon(
+        onPressed: () => _openRecordDialog(context, ref),
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('Record'),
+      ),
+      child: recordsAsync.when(
+        loading: () => const LoadingView(),
+        error: (error, stackTrace) => Text(error.toString()),
+        data: (result) => result.fold(
+          (failure) => Text(failure.message),
+          (records) => records.isEmpty
+              ? const Text('No performance records yet.')
+              : Column(children: [for (final r in records) _PerformanceTile(record: r)]),
+        ),
+      ),
+    );
+  }
+}
+
+class _PerformanceTile extends StatelessWidget {
+  const _PerformanceTile({required this.record});
+
+  final PerformanceRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final display = record.unit != null ? '${record.value} ${record.unit}' : record.value;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(record.metricName),
+      subtitle: Text(record.recordedAt.toLocal().toString().substring(0, 10)),
+      trailing: Chip(label: Text(display), visualDensity: VisualDensity.compact),
     );
   }
 }

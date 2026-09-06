@@ -50,12 +50,12 @@ export class AssignmentSubmission {
   @Column({ type: 'varchar', default: SubmissionStatus.SUBMITTED })
   status: SubmissionStatus;
 
-  // Deliberately an untyped, nullable string rather than a numeric column — docs/01 §1.4's
-  // configurable-metrics idea (numeric/scale/pass-fail/text/percentage) applies here too, and a
-  // full performance_metric_definitions-backed grading scheme is Phase 5's own separate
-  // Performance-tracking item, not built yet; a free-form grade string ("A", "85/100", "Pass")
-  // is the honest amount of structure until that lands.
-  @Column({ nullable: true })
+  // Deliberately an untyped, nullable string rather than a numeric column or a
+  // performance_metric_definitions-backed value (docs/01 §1.4's configurable-metrics module,
+  // Phase 5 step 2) — an assignment grade is a simpler, one-off annotation ("A", "85/100",
+  // "Pass") on a single submission, not a tracked metric with its own history; wiring assignment
+  // review into the Performance module is a real, natural follow-up, not done in this pass.
+  @Column({ type: 'varchar', nullable: true })
   grade?: string | null;
 
   @Column('text', { nullable: true })

@@ -242,9 +242,20 @@ device_push_tokens            -- addition beyond this doc's sketch: this table d
 performance_metric_definitions   -- docs/01 §1.4
   id, teacher_category_id nullable, teacher_profile_id nullable,
   name, metric_type ('numeric'|'scale_1_5'|'pass_fail'|'text'|'percentage'), unit
+  -- implemented: added institute_id (nullable) beyond this sketch — docs/06 §6.2 names
+  -- "institute defaults" as a thing institute_admin can define, but this table had nowhere to
+  -- attach one. Exactly one of teacher_category_id/institute_id/teacher_profile_id is set,
+  -- enforced in PerformanceService. teacher_categories.default_performance_template_id (a
+  -- reserved hint column since Phase 4 step 1) stays unused — a category's "default template"
+  -- turned out to mean "however many teacher_category_id-scoped rows exist" (plural), not one
+  -- template id pointing at a single row.
 
 performance_records
   id, student_id, metric_definition_id, class_id nullable, value, recorded_at, recorded_by
+  -- implemented: `value` is validated against its definition's metric_type at write time
+  -- (a numeric string, "1".."5", "pass"/"fail", or non-empty text) rather than the schema
+  -- enforcing a fixed shape — the same choice assignment_submissions.grade makes for the same
+  -- underlying reason (no single fixed shape fits every metric type a category might define).
 
 calendar_events               -- unifies classes, exams, fee due dates, holidays into one queryable view
   id, institute_id nullable, owner_type ('teacher'|'student'|'class'), owner_id,

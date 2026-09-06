@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 step 1)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–2)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -93,6 +93,15 @@ inventory and flows this scaffold implements.
   resubmit one external link — again link-only rather than a real upload — and shows grade/
   feedback once reviewed). Individual-student-targeted assignments have no mobile creation UI
   (class-targeting only); the backend supports both
+- `features/performance` — docs/07-roadmap.md's Phase 5 step 2. A **Performance section on the
+  existing Student Detail screen** (matching the Fees precedent), teacher-only: "Record" opens a
+  dialog whose metric dropdown is populated straight from `GET /performance-metric-definitions`
+  (whatever's actually applicable to this teacher — their own metrics, their institute's
+  defaults, their category's defaults — no client-side per-category logic), plus a single value
+  field for every metric type (server-side validation is the real source of truth for what's
+  valid, surfaced back as an inline error). The read-only history list shows what's been
+  recorded. A parent/student-facing read view is docs/08 §8.2's own separate "Performance |
+  Metric history for the child" item, left for the Parent-dashboard pass (Phase 5 step 3)
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student; the rest

@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 step 1)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–2)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
@@ -65,6 +65,16 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   new `attemptNumber` row, never an overwrite). Fires `notify()` on assignment creation and
   submission review (new `ASSIGNMENT` notification category, defaults to immediate push). Uses
   the shared `common/storage/` `StorageAdapter` for attachments
+- `modules/performance` — performance_metric_definitions/performance_records (docs/01 §1.4's
+  configurable metrics — the same two tables give an academic teacher "Test Score," a sports
+  coach "40m Sprint Time," a music teacher "Scale Mastery," never hard-coded per category; three
+  example category defaults are seeded in the migration). Exactly one of
+  {teacherCategory, institute, teacherProfile} scopes a definition, matching docs/06 §6.2's three
+  separate "define" grants (super_admin/institute_admin/teacher); only a teacher ever *records* a
+  value (their own students only) — institute_admin/super_admin hold `define`+`read` but never
+  `record`, the same R-not-F pattern Assignments already established. `value` is a validated
+  plain string (numeric/percentage/scale_1_5/pass_fail/text per the metric's declared type),
+  matching `assignment_submissions.grade`'s same reasoning
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging, and
   `storage/` — `StorageAdapter`/`LocalDiskStorageAdapter` (no S3/GCS account exists for this
@@ -73,13 +83,17 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   server-generated (`randomUUID()`), never derived from client input, so it's path-traversal-safe
   by construction; each module keeps its own upload-bytes controller route and `main.ts`
   raw-body registration under its own resource path
-- Nine migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Ten migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
   (`note.manage`/`note.read` grants), notifications (no new grants — every route operates on the
   caller's own data, same as `/auth/me`), assignments (`assignment.manage`/`assignment.read`/
-  `assignment.submit` grants, matching docs/06 §6.2 literally) — see docs/06 §6.2
+  `assignment.submit` grants, matching docs/06 §6.2 literally), performance
+  (`performance.define`/`performance.record`/`performance.read` grants, also matching docs/06
+  §6.2 literally, seeding three example category-default metrics) — see docs/06 §6.2. All ten
+  have now run end-to-end against a real Postgres instance (see "Local setup" below) — the first
+  time in this project's history that was possible.
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted
@@ -94,6 +108,19 @@ Financial endpoints need the raw request body for webhook signature verification
 gateway webhook) — `main.ts` passes `{ rawBody: true }` to `NestFactory.create` so
 `req.rawBody` is available alongside the normally-parsed `req.body`; no other route is affected.
 
+Two real bugs were caught the first time this project's `test:e2e` actually ran against live
+Postgres (Phase 5 step 2 — Docker had been unavailable in this dev environment for every step
+before that): (1) `AssignmentSubmission.grade`'s `@Column({ nullable: true })` had no explicit
+`type:` for its `string | null` field — TypeORM's reflection-based inference reports `Object`
+for that union, not `String`, so `migration:run` failed outright against a live database (every
+other nullable-string column in this codebase already declares its type explicitly; this one
+didn't — fixed by adding `type: 'varchar'`). (2) Refresh-token rotation had no unique `jti` claim
+in its JWT payload, so two tokens issued for the same user/device within the same wall-clock
+second could sign to the byte-identical string, letting a rotated-out token collide with its own
+replacement and pass reuse detection — fixed by adding a random `jti` to the refresh token's
+payload (not the access token's — it's validated by signature alone, never looked up by hash).
+Both are worth remembering if you add another nullable-string column or touch token issuance.
+
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).
 
@@ -107,9 +134,9 @@ docker compose -f ../infra/docker-compose.yml up -d
 npm install
 
 # 3. Configure env
-cp .env.example .env   # defaults already match the docker-compose service
+cp .env.example .env   # defaults already match the docker-compose service (Postgres on host port 5433, not 5432 — see infra/docker-compose.yml's comment: a locally-installed native Postgres service is a common 5432 collision)
 
-# 4. Run the initial migration
+# 4. Run all migrations
 npm run migration:run
 
 # 5. Start the API (watch mode)
@@ -122,7 +149,7 @@ API is served at `http://localhost:3000/api/v1`.
 
 ```bash
 npm test            # unit tests
-npm run test:e2e    # integration tests — needs Postgres up + migrations applied, see test/auth.e2e-spec.ts
+npm run test:e2e    # integration tests against real Postgres — see test/auth.e2e-spec.ts; run "Local setup" steps 1/3/4 first
 ```
 
 ## Adding a migration

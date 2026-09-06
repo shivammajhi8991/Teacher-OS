@@ -9,9 +9,11 @@ dotenv.config();
 // doesn't need to boot the whole Nest DI graph just to run a migration.
 export const AppDataSource = new DataSource({
   type: 'postgres',
+  // Port 5433, not Postgres's usual 5432 — see infra/docker-compose.yml's comment (a
+  // locally-installed native Postgres service is a common 5432 collision on a dev machine).
   url:
     process.env.DATABASE_URL ??
-    'postgres://teacheros:teacheros@localhost:5432/teacheros',
+    'postgres://teacheros:teacheros@localhost:5433/teacheros',
   entities: ['src/**/*.entity.ts'],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,

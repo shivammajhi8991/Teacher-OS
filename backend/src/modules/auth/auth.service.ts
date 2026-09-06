@@ -9,7 +9,7 @@ import { IsNull, MoreThan, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
@@ -224,10 +224,19 @@ export class AuthService {
       secret: jwtConfig.accessSecret,
       expiresIn: jwtConfig.accessExpiresIn,
     });
-    const refreshToken = await this.jwtService.signAsync(commonPayload, {
-      secret: jwtConfig.refreshSecret,
-      expiresIn: jwtConfig.refreshExpiresIn,
-    });
+    // `jti` — without it, two refresh tokens issued for the same user/role/institute/device
+    // within the same wall-clock second (iat has 1-second resolution) sign to the byte-identical
+    // JWT string. That collision isn't hypothetical: it's exactly what let a rotated-out refresh
+    // token pass as "still valid" in practice — the just-issued replacement shared its hash, so
+    // the reuse check matched the new row instead of correctly finding the old one revoked. Real
+    // uniqueness per issuance is what a rotation scheme's reuse detection actually depends on.
+    const refreshToken = await this.jwtService.signAsync(
+      { ...commonPayload, jti: randomUUID() },
+      {
+        secret: jwtConfig.refreshSecret,
+        expiresIn: jwtConfig.refreshExpiresIn,
+      },
+    );
 
     const expiresAt = new Date(
       Date.now() + parseDurationToMs(jwtConfig.refreshExpiresIn),

@@ -7,8 +7,12 @@ services:
       POSTGRES_USER: teacheros
       POSTGRES_PASSWORD: teacheros
       POSTGRES_DB: teacheros
+    # Host port 5433, not 5432 — a locally-installed native Postgres Windows service binding
+    # 0.0.0.0:5432 first is a common dev-machine collision (hit during this project's own setup:
+    # connections silently reached the native service instead of this container, failing auth
+    # against credentials that only exist here). The container's own internal port stays 5432.
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - teacheros_pg_data:/var/lib/postgresql/data
 

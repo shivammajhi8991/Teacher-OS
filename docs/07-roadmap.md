@@ -20,10 +20,12 @@ Build order, each step shippable and testable before the next starts:
 1. **Auth ✅ implemented** — register/login/refresh (rotating)/logout/logout-all/`auth/me`, in
    both `backend/src/modules/auth` and `mobile/lib/features/auth`, end to end. OTP/social login
    deferred (docs/02 §2.4 — architecturally ready, not built). Verified: backend `npm install` /
-   `tsc --noEmit` / `eslint` / `nest build` / `npm test` all green, plus a real `auth.e2e-spec.ts`
-   (needs Postgres up — not run in the sandbox this was built in, no Docker daemon available);
-   mobile hand-verified for import/path correctness but not yet run through `flutter analyze` /
-   `flutter test` (no Flutter SDK in that environment) — run both before building on top of it.
+   `tsc --noEmit` / `eslint` / `nest build` / `npm test` all green; `auth.e2e-spec.ts` finally ran
+   for real against live Postgres during the Phase 5 step 2 pass (Docker was unavailable in this
+   environment for every step before that) and caught a genuine bug in refresh-token rotation —
+   see that step's entry below for the fix. Mobile hand-verified for import/path correctness but
+   not yet run through `flutter analyze` / `flutter test` (no Flutter SDK in that environment) —
+   run both before building on top of it.
    `users` and `institutes` also implemented as supporting modules (needed for auth's role/tenant
    model), each with a first migration seeding roles + a starter permission set (docs/06 §6.2,
    grows as later steps add their own permission keys).
@@ -324,8 +326,73 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    resubmission edge cases, review notification, and the teacher-sees-all-vs-student-sees-own
    submission scoping). Mobile hand-verified for import/path and API-shape correctness only —
    still no Flutter SDK in this environment.
-2. **Performance/progress tracking** — configurable metrics, docs/01 §1.4.
-3. **Parent dashboard + parent-specific notification digesting.**
+2. **Performance/progress tracking ✅ implemented** — `backend/src/modules/performance`
+   (performance_metric_definitions, performance_records) and, on mobile, a **Performance section
+   on the existing Student Detail screen** (matching the Fees precedent) — teacher records a
+   value against a metric, sees the student's history. docs/01 §1.4's whole point: the same two
+   tables give an academic teacher "Test Score," a sports coach "40m Sprint Time," and a music
+   teacher "Scale Mastery," never hard-coded per category — three example category-default
+   metrics are seeded in the migration to demonstrate this, not to enumerate every category's
+   real needs.
+
+   docs/06 §6.2 gives three separate roles their own scope to *define* a metric — super_admin
+   (category-wide defaults), institute_admin (institute-wide defaults), a teacher (their own) —
+   enforced as an "exactly one of {teacherCategory, institute, teacherProfile}" rule, the same
+   pattern used for Discount's class/student targeting and Notes' objectKey/externalUrl. Only a
+   teacher can ever *record* a value against a metric (their own students only, verified via
+   `student_teacher_assignments`) — institute_admin/super_admin hold `define`+`read` but never
+   `record`, the same R-not-F pattern AssignmentsService already documents for its own resource.
+   `institute` on the definition is an addition beyond docs/03's original sketch (which only
+   listed teacher_category_id/teacher_profile_id) — docs/06 names "institute defaults" as a
+   thing institute_admin can define, but the schema had nowhere to attach one; see docs/03's
+   note. `teacher_categories.default_performance_template_id` (a reserved hint column since
+   Phase 4 step 1) stays unused — a category's "default template" turned out to mean "however
+   many teacherCategory-scoped rows exist" (plural), not one template id pointing at a single row.
+
+   Real, tested validation: `value` is a plain string column (matching
+   `AssignmentSubmission.grade`'s same "flexible column, service-validated" choice — no single
+   fixed shape fits numeric/scale/pass-fail/text/percentage at once), checked against the
+   metric's declared type at write time (a numeric string, "1".."5", "pass"/"fail", or non-empty
+   text) rather than left to the schema to enforce.
+
+   **This step is also where Docker finally became usable in this environment** (it had been
+   down for every step before this one) and where the live-Postgres verification pass this
+   unblocked immediately paid for itself:
+   - **Local Postgres port collision, fixed**: a native Windows Postgres service was already
+     bound to `0.0.0.0:5432`, silently intercepting connections meant for the docker-compose
+     container and causing password-authentication failures against credentials that only ever
+     existed in the fresh container. `infra/docker-compose.yml` now maps the container to host
+     port **5433** instead (internal port unchanged); `backend/.env.example`,
+     `config/configuration.ts`'s fallback, and `database/data-source.ts`'s fallback all updated
+     to match. A genuinely common dev-machine annoyance, not specific to this session — worth
+     keeping as the project's permanent default.
+   - **A real bug in `AssignmentSubmission.grade`'s column definition**: `@Column({ nullable:
+     true })` with a `string | null` TypeScript type has no explicit `type:`, and TypeORM's
+     reflection-based type inference reports `Object` for that union rather than `String` —
+     `migration:run` failed outright (`DataTypeNotSupportedError`) the moment it tried to build
+     entity metadata against a live database. Every other nullable-string column in this codebase
+     already declares its type explicitly (grep confirms it); this one didn't. Fixed by adding
+     `type: 'varchar'`; the already-correct raw-SQL migration needed no change.
+   - **A real security bug in refresh-token rotation**: `auth.e2e-spec.ts`'s "rotates the refresh
+     token and rejects reuse of the old one" test failed — reuse was accepted. Root cause: the
+     refresh-token JWT payload (`{ sub, role, instituteId, deviceId }`) had no unique claim, so
+     two tokens issued for the same user/role/institute/device within the same wall-clock second
+     (`iat` has 1-second resolution) sign to the byte-identical JWT string — the just-issued
+     replacement token collided with, and shared a hash with, the very token being rotated out,
+     so the reuse check matched the new row instead of correctly finding the old one revoked.
+     Fixed by adding a random `jti` (via `randomUUID()`) to the refresh token's payload only
+     (the access token doesn't need one — it's validated by signature alone, never looked up by
+     hash). `auth.e2e-spec.ts` now passes for the first time ever in this project, 7/7.
+
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (**142 tests** — 119 unit + 23 new for PerformanceService covering scope resolution,
+   applicability checks, and per-metric-type value validation) — **and, for the first time,
+   `npm run test:e2e` / `auth.e2e-spec.ts` actually ran against real Postgres and passed, 7/7**,
+   plus all nine migrations applied cleanly end-to-end for the first time. Mobile hand-verified
+   for import/path and API-shape correctness only — still no Flutter SDK in this environment.
+3. **Parent dashboard + parent-specific notification digesting** — docs/08 §8.2's own
+   "Performance | Metric history for the child" item belongs here, not in step 2 above: step 2
+   scoped mobile to the teacher-facing record/view flow only.
 4. **Institute/admin module** — branches, teacher invites, institute-wide announcements,
    revenue-split payouts (docs/01 §1.3).
 5. **Reports & analytics** — PDF/CSV export, async export jobs per docs/04 §4.7.

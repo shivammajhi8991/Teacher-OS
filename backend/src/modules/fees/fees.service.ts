@@ -40,6 +40,10 @@ import {
   AttendanceStatus,
 } from '../attendance/entities/attendance-record.entity';
 import { User } from '../users/entities/user.entity';
+import {
+  InstituteTeacherPayout,
+  PayoutStatus,
+} from '../institutes/entities/institute-teacher-payout.entity';
 import { TeacherProfilesService } from '../teacher-profiles/teacher-profiles.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
@@ -116,6 +120,8 @@ export class FeesService {
     private readonly attendanceSessionRepo: Repository<AttendanceSession>,
     @InjectRepository(AttendanceRecord)
     private readonly attendanceRecordRepo: Repository<AttendanceRecord>,
+    @InjectRepository(InstituteTeacherPayout)
+    private readonly payoutRepo: Repository<InstituteTeacherPayout>,
     private readonly teacherProfilesService: TeacherProfilesService,
     private readonly notificationsService: NotificationsService,
     @Inject(PAYMENT_GATEWAY_ADAPTER)
@@ -470,6 +476,7 @@ export class FeesService {
       amount: dto.amount.toFixed(2),
       currency: invoice.currency,
       method: dto.method,
+      idempotencyKey: dto.idempotencyKey,
       status: PaymentStatus.CONFIRMED,
       recordedBy: { id: requester.userId } as User,
       confirmedVia: ConfirmedVia.MANUAL,
@@ -488,6 +495,7 @@ export class FeesService {
       `${invoice.currency} ${Number(dto.amount).toFixed(2)} received for ${invoice.billingPeriodStart} – ${invoice.billingPeriodEnd}`,
       { invoiceId: invoice.id, paymentId: saved.id },
     );
+    await this.generatePayoutIfApplicable(saved, invoice);
     return saved;
   }
 
@@ -545,7 +553,9 @@ export class FeesService {
 
     const payment = await this.paymentRepo.findOne({
       where: { gatewayReference: parsed.sessionId },
-      relations: { invoice: { student: true } },
+      relations: {
+        invoice: { student: true, teacherProfile: true, institute: true },
+      },
     });
     if (!payment) return; // unknown session — nothing to reconcile, ack anyway (webhook is one-way)
     if (payment.status !== PaymentStatus.PENDING) return; // already reconciled — idempotent no-op
@@ -578,6 +588,7 @@ export class FeesService {
         `${payment.invoice.currency} ${Number(payment.amount).toFixed(2)} received for ${payment.invoice.billingPeriodStart} – ${payment.invoice.billingPeriodEnd}`,
         { invoiceId: payment.invoice.id, paymentId: payment.id },
       );
+      await this.generatePayoutIfApplicable(payment, payment.invoice);
     }
   }
 
@@ -936,5 +947,42 @@ export class FeesService {
         this.notificationsService.notify({ userId, type, title, body, data }),
       ),
     );
+  }
+
+  // docs/01 §1.3 "Institute → Teacher revenue split," docs/03 §3.7 `institute_teacher_payouts`.
+  // One payout row per CONFIRMED payment (not per invoice) — `InstituteTeacherPayout.payment`
+  // carries a `@Unique` constraint, so a partial payment generates a proportional payout as it
+  // lands, and a retried gateway webhook can never double-generate one for the same payment.
+  // Institute-collected fees with no payout_percent configured for the teacher are left alone —
+  // that's the "no revenue split" case, not an error.
+  private async generatePayoutIfApplicable(
+    payment: Payment,
+    invoice: Invoice,
+  ): Promise<void> {
+    if (!invoice.institute || invoice.teacherProfile.payoutPercent == null) {
+      return;
+    }
+    const payoutAmount =
+      (Number(payment.amount) * Number(invoice.teacherProfile.payoutPercent)) /
+      100;
+    try {
+      await this.payoutRepo.save(
+        this.payoutRepo.create({
+          institute: invoice.institute,
+          teacherProfile: invoice.teacherProfile,
+          invoice,
+          payment,
+          payoutPercent: invoice.teacherProfile.payoutPercent,
+          payoutAmount: payoutAmount.toFixed(2),
+          status: PayoutStatus.PENDING,
+        }),
+      );
+    } catch (err) {
+      // Unique-constraint violation on `payment_id` — a payout already exists for this payment
+      // (e.g. a retried webhook after a partial earlier failure). Nothing else to do.
+      if ((err as { code?: string }).code !== '23505') {
+        throw err;
+      }
+    }
   }
 }

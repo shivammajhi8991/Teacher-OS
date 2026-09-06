@@ -19,6 +19,7 @@ import { StudentGuardianLink } from '../students/entities/student-guardian-link.
 import { StudentTeacherAssignment } from '../students/entities/student-teacher-assignment.entity';
 import { AttendanceSession } from '../attendance/entities/attendance-session.entity';
 import { AttendanceRecord } from '../attendance/entities/attendance-record.entity';
+import { InstituteTeacherPayout } from '../institutes/entities/institute-teacher-payout.entity';
 import { TeacherProfilesService } from '../teacher-profiles/teacher-profiles.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PAYMENT_GATEWAY_ADAPTER } from './gateway/payment-gateway.adapter';
@@ -82,6 +83,10 @@ describe('FeesService', () => {
   const assignmentRepo = { findOne: jest.fn() };
   const attendanceSessionRepo = { find: jest.fn().mockResolvedValue([]) };
   const attendanceRecordRepo = { count: jest.fn().mockResolvedValue(0) };
+  const payoutRepo = {
+    create: jest.fn((d) => d),
+    save: jest.fn((d) => Promise.resolve({ id: 'payout-1', ...d })),
+  };
   const teacherProfilesService = { findByUserId: jest.fn() };
   const notificationsService = {
     notify: jest.fn().mockResolvedValue(undefined),
@@ -145,6 +150,10 @@ describe('FeesService', () => {
         {
           provide: getRepositoryToken(AttendanceRecord),
           useValue: attendanceRecordRepo,
+        },
+        {
+          provide: getRepositoryToken(InstituteTeacherPayout),
+          useValue: payoutRepo,
         },
         { provide: TeacherProfilesService, useValue: teacherProfilesService },
         { provide: NotificationsService, useValue: notificationsService },
@@ -239,6 +248,28 @@ describe('FeesService', () => {
       );
     });
 
+    // Regression guard: `idempotencyKey` is a real NOT NULL unique column
+    // (payment.entity.ts) — a mocked repo happily accepts a payment missing it, so only an
+    // explicit assertion on what gets passed to `create()` catches a create() call that forgot
+    // to carry it over from the DTO (a real bug this pass hit live against Postgres — see
+    // docs/07 Phase 5 step 4).
+    it('passes the idempotency key through to the created payment', async () => {
+      paymentRepo.findOne.mockResolvedValueOnce(null);
+      invoiceRepo.findOne.mockResolvedValue(invoice);
+      paymentRepo.find.mockResolvedValue([]);
+
+      await service.recordPayment(teacher, {
+        invoiceId: 'invoice-1',
+        amount: 1000,
+        method: 'cash' as any,
+        idempotencyKey: 'key-idempotency-check',
+      });
+
+      expect(paymentRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: 'key-idempotency-check' }),
+      );
+    });
+
     it('grants a credit-ledger entry when the recorded payment overpays the invoice', async () => {
       paymentRepo.findOne.mockResolvedValueOnce(null);
       invoiceRepo.findOne.mockResolvedValue(invoice);
@@ -256,6 +287,84 @@ describe('FeesService', () => {
       expect(creditLedgerRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ amount: '200.00' }),
       );
+    });
+
+    // docs/03 §3.7 "Institute → Teacher revenue split" — a payout is only generated for an
+    // institute-collected invoice whose teacher has a configured payout_percent; a
+    // directly-billed (non-institute) invoice, like the `invoice` fixture above, never generates
+    // one, which the two tests above already exercise implicitly (payoutRepo.save untouched).
+    it('generates a payout for the confirmed share of an institute-collected invoice', async () => {
+      const instituteInvoice = {
+        ...invoice,
+        institute: { id: 'institute-1' },
+        teacherProfile: { id: 'teacher-profile-1', payoutPercent: '30.00' },
+      };
+      paymentRepo.findOne.mockResolvedValueOnce(null);
+      invoiceRepo.findOne.mockResolvedValue(instituteInvoice);
+      paymentRepo.find.mockResolvedValue([
+        { status: PaymentStatus.CONFIRMED, amount: '1000.00' },
+      ]);
+
+      await service.recordPayment(teacher, {
+        invoiceId: 'invoice-1',
+        amount: 1000,
+        method: 'cash' as any,
+        idempotencyKey: 'key-4',
+      });
+
+      expect(payoutRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          institute: instituteInvoice.institute,
+          teacherProfile: instituteInvoice.teacherProfile,
+          payoutPercent: '30.00',
+          payoutAmount: '300.00',
+        }),
+      );
+    });
+
+    it('does not generate a payout when the teacher has no payout_percent configured', async () => {
+      const instituteInvoice = {
+        ...invoice,
+        institute: { id: 'institute-1' },
+        teacherProfile: { id: 'teacher-profile-1', payoutPercent: null },
+      };
+      paymentRepo.findOne.mockResolvedValueOnce(null);
+      invoiceRepo.findOne.mockResolvedValue(instituteInvoice);
+      paymentRepo.find.mockResolvedValue([
+        { status: PaymentStatus.CONFIRMED, amount: '1000.00' },
+      ]);
+
+      await service.recordPayment(teacher, {
+        invoiceId: 'invoice-1',
+        amount: 1000,
+        method: 'cash' as any,
+        idempotencyKey: 'key-5',
+      });
+
+      expect(payoutRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('swallows a duplicate-payout unique-constraint error rather than failing the payment', async () => {
+      const instituteInvoice = {
+        ...invoice,
+        institute: { id: 'institute-1' },
+        teacherProfile: { id: 'teacher-profile-1', payoutPercent: '30.00' },
+      };
+      paymentRepo.findOne.mockResolvedValueOnce(null);
+      invoiceRepo.findOne.mockResolvedValue(instituteInvoice);
+      paymentRepo.find.mockResolvedValue([
+        { status: PaymentStatus.CONFIRMED, amount: '1000.00' },
+      ]);
+      payoutRepo.save.mockRejectedValueOnce({ code: '23505' });
+
+      await expect(
+        service.recordPayment(teacher, {
+          invoiceId: 'invoice-1',
+          amount: 1000,
+          method: 'cash' as any,
+          idempotencyKey: 'key-6',
+        }),
+      ).resolves.toBeDefined();
     });
   });
 

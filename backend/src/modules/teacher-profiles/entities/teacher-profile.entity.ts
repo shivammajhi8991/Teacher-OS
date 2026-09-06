@@ -81,6 +81,20 @@ export class TeacherProfile {
   @Column({ name: 'fee_structure_default_id', type: 'uuid', nullable: true })
   feeStructureDefaultId?: string | null;
 
+  // docs/03 §3.7 `institute_teacher_payouts`'s own note: "needs a payout-percent config that
+  // doesn't exist on any entity yet." Addition, Phase 5 step 4 — null means "not an
+  // institute-collected-fees arrangement" (an independent teacher, or an institute that hasn't
+  // configured a split yet); a payout row is only ever generated when this is set AND the
+  // teacher's invoice is institute-scoped (FeesService's payment-confirmation hook).
+  @Column({
+    name: 'payout_percent',
+    type: 'numeric',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+  })
+  payoutPercent?: string | null;
+
   @Column({
     name: 'verification_status',
     type: 'varchar',

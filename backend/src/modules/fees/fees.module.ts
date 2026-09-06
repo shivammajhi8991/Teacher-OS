@@ -17,6 +17,7 @@ import { StudentGuardianLink } from '../students/entities/student-guardian-link.
 import { StudentTeacherAssignment } from '../students/entities/student-teacher-assignment.entity';
 import { AttendanceSession } from '../attendance/entities/attendance-session.entity';
 import { AttendanceRecord } from '../attendance/entities/attendance-record.entity';
+import { InstituteTeacherPayout } from '../institutes/entities/institute-teacher-payout.entity';
 import { FeesService } from './fees.service';
 import { FeesController } from './fees.controller';
 import { TeacherProfilesModule } from '../teacher-profiles/teacher-profiles.module';
@@ -45,6 +46,7 @@ import { MockPaymentGatewayAdapter } from './gateway/mock-payment-gateway.adapte
       StudentTeacherAssignment,
       AttendanceSession,
       AttendanceRecord,
+      InstituteTeacherPayout,
     ]),
     TeacherProfilesModule,
     NotificationsModule,

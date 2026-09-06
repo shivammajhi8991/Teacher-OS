@@ -30,7 +30,18 @@ institutes
   subscription_plan_id (FK → subscription_plans, nullable at launch), status, created_at...
 
 branches
-  id, institute_id, name, address, timezone
+  id, institute_id, name, address, timezone, deleted_at
+  -- implemented: added deleted_at (docs/07 Phase 5 step 4) — missing from the original Phase 4
+  -- step 1 entity, added alongside its first real use (InstitutesService.archiveBranch), matching
+  -- this schema's never-hard-delete convention everywhere else.
+
+teacher_institute_invites   -- addition beyond this doc's original sketch (docs/07 Phase 5 step 4)
+  id, institute_id, code unique, created_by, expires_at, redeemed_at nullable,
+  redeemed_by_teacher_profile_id nullable, created_at
+  -- mirrors student_invites' shape (§3.4) — a short-lived code a teacher (who has already
+  -- completed onboarding, §3.3) redeems to join an institute. Rejects outright if that teacher
+  -- profile is already affiliated with a (possibly different) institute — a transfer flow is a
+  -- documented scope cut, not built.
 
 verification_requests      -- teacher-submitted qualification/ID docs for admin review
   id, teacher_profile_id, document_urls[], status ('pending'|'approved'|'rejected'),
@@ -52,7 +63,12 @@ teacher_profiles
   service_area, teaching_mode ('online'|'offline'|'both'),
   subjects_or_skills (jsonb array of {name, level}),
   class_duration_minutes_default, fee_structure_default_id,
-  verification_status ('unverified'|'pending'|'verified'), rating_avg, rating_count
+  verification_status ('unverified'|'pending'|'verified'), rating_avg, rating_count,
+  payout_percent nullable
+  -- implemented (docs/07 Phase 5 step 4): payout_percent answers this doc's own §3.7 note that
+  -- institute_teacher_payouts "needs a payout-percent config that doesn't exist on any entity
+  -- yet." Null means no institute-collected-fees revenue-split arrangement — an independent
+  -- teacher, or an institute that hasn't configured one for that teacher.
 ```
 
 `teacher_categories` being data, not an enum baked into code, is the mechanism satisfying the spec's "add new categories without major code changes."
@@ -181,9 +197,16 @@ refunds
   id, payment_id, amount, reason, status ('pending'|'processed'|'rejected'), processed_by, processed_at
 
 institute_teacher_payouts    -- revenue-split for institute-collected fees (docs/01 §1.3)
-  id, institute_id, teacher_profile_id, invoice_id, payout_percent, payout_amount, status, paid_at
-  -- NOT YET IMPLEMENTED (docs/07 Phase 4 step 6) — needs a payout-percent config that doesn't
-  -- exist on any entity yet (Institute/TeacherProfile). Documented gap, not silently dropped.
+  id, institute_id, teacher_profile_id, invoice_id, payment_id unique, payout_percent,
+  payout_amount, status ('pending'|'paid'), paid_at, created_at
+  -- implemented (docs/07 Phase 5 step 4), closing this doc's own previously-flagged gap now that
+  -- teacher_profiles.payout_percent (§3.3) exists. One row per CONFIRMED payment, not per
+  -- invoice — payment_id (unique), an addition beyond this doc's original sketch, so a
+  -- partially-paid invoice generates a proportional payout as each payment lands rather than
+  -- double-counting or waiting for full payment, and a retried gateway webhook can never
+  -- generate a duplicate payout for the same payment. Generated inside FeesService at the moment
+  -- a payment is confirmed (it already has payment/invoice/teacherProfile loaded there) rather
+  -- than via a new Fees→Institutes service dependency.
 
 student_credit_ledger_entries  -- an addition beyond this doc's original sketch, see below
   id, student_id, amount, source_payment_id nullable, source_invoice_id nullable, note, created_at
@@ -225,8 +248,18 @@ assignment_submissions
   -- attempt, matching this schema's audit-everywhere convention.
 
 announcements
-  id, institute_id nullable, teacher_profile_id nullable, target_type ('class'|'institute'|'individual'),
-  target_id, title, body, created_at
+  id, institute_id nullable, created_by, target_type ('class'|'institute'|'platform'),
+  target_id nullable, title, body, created_at
+  -- implemented (docs/07 Phase 5 step 4) with two deviations from this doc's original sketch:
+  -- (1) created_by (a plain User) replaces teacher_profile_id — an institute_admin or super_admin
+  -- author has no teacher_profile at all, so a column only ever populated for one of three
+  -- sender types wasn't earning its keep; a teacher's own profile is still resolvable from
+  -- created_by via TeacherProfilesService when needed. (2) 'platform' replaces the sketched
+  -- 'individual' target type — neither this doc nor docs/06's permission matrix ever specified
+  -- who could send an 'individual' announcement or why, while docs/06 §6.2 names super_admin's
+  -- grant as "platform-wide" with nowhere for that to point; target_id is unused for 'platform'.
+  -- target_id is otherwise polymorphic (a Class id for 'class', an Institute id for
+  -- 'institute') — the same "resolved in code" shape document_shares.shared_with_id already uses.
 
 notifications                -- generated events, fanned out per user via notification_preferences
   id, user_id, type, title, body, data (jsonb), read_at, created_at, delivery_channel

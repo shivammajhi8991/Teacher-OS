@@ -18,9 +18,10 @@ class MeResponseDto {
 
   factory MeResponseDto.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>;
-    final roles = (json['roles'] as List)
-        .map((r) => (r as Map<String, dynamic>)['role'] as String)
-        .toList();
+    final roles = (json['roles'] as List).map((r) {
+      final role = r as Map<String, dynamic>;
+      return (role: role['role'] as String, instituteId: role['instituteId'] as String?);
+    }).toList();
     return MeResponseDto(
       id: user['id'] as String,
       email: user['email'] as String?,
@@ -39,18 +40,23 @@ class MeResponseDto {
   final String fullName;
   final String? avatarUrl;
   final String preferredLanguage;
-  final List<String> roles;
+  final List<({String role, String? instituteId})> roles;
   final List<String> permissions;
 
-  AppUser toEntity() => AppUser(
-        id: id,
-        email: email,
-        phone: phone,
-        fullName: fullName,
-        avatarUrl: avatarUrl,
-        preferredLanguage: preferredLanguage,
-        // docs/04 §4.3 switch-role picks a different one later; login/register default to the
-        // first role the backend returns (AuthService.login picks the same one server-side).
-        activeRole: roles.isNotEmpty ? roles.first : 'student',
-      );
+  AppUser toEntity() {
+    // docs/04 §4.3 switch-role picks a different one later; login/register default to the first
+    // role the backend returns (AuthService.login picks the same one server-side) — its own
+    // instituteId travels with it rather than being dropped, per this file's own header comment.
+    final active = roles.isNotEmpty ? roles.first : (role: 'student', instituteId: null);
+    return AppUser(
+      id: id,
+      email: email,
+      phone: phone,
+      fullName: fullName,
+      avatarUrl: avatarUrl,
+      preferredLanguage: preferredLanguage,
+      activeRole: active.role,
+      instituteId: active.instituteId,
+    );
+  }
 }

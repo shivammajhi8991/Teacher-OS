@@ -21,6 +21,7 @@ describe('TeacherProfilesService', () => {
   const categoryRepo = { findOne: jest.fn(), find: jest.fn() };
   const profileRepo = {
     findOne: jest.fn(),
+    find: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
   };
@@ -120,6 +121,68 @@ describe('TeacherProfilesService', () => {
       });
 
       expect(result.headline).toBe('New');
+    });
+  });
+
+  describe('listByInstitute', () => {
+    const superAdmin = {
+      userId: 'user-super',
+      activeRole: 'super_admin',
+      instituteId: null,
+    } as const;
+    const ownAdmin = {
+      userId: 'user-admin',
+      activeRole: 'institute_admin',
+      instituteId: 'institute-1',
+    } as const;
+    const otherAdmin = {
+      userId: 'user-other-admin',
+      activeRole: 'institute_admin',
+      instituteId: 'institute-2',
+    } as const;
+
+    it("rejects an institute_admin viewing another institute's roster", async () => {
+      await expect(
+        service.listByInstitute('institute-1', otherAdmin),
+      ).rejects.toThrow(ForbiddenException);
+      expect(profileRepo.find).not.toHaveBeenCalled();
+    });
+
+    it("returns the roster, shaped without passwordHash, for an institute_admin's own institute", async () => {
+      profileRepo.find.mockResolvedValue([
+        {
+          id: 'profile-1',
+          headline: 'Guitar teacher',
+          verificationStatus: 'verified',
+          payoutPercent: '30.00',
+          user: {
+            id: 'user-1',
+            fullName: 'Jamie Lee',
+            email: 'jamie@example.com',
+          },
+        },
+      ]);
+
+      const roster = await service.listByInstitute('institute-1', ownAdmin);
+
+      expect(roster).toEqual([
+        {
+          id: 'profile-1',
+          fullName: 'Jamie Lee',
+          email: 'jamie@example.com',
+          headline: 'Guitar teacher',
+          verificationStatus: 'verified',
+          payoutPercent: '30.00',
+        },
+      ]);
+      expect(roster[0]).not.toHaveProperty('passwordHash');
+    });
+
+    it("allows super_admin to view any institute's roster", async () => {
+      profileRepo.find.mockResolvedValue([]);
+      await expect(
+        service.listByInstitute('institute-2', superAdmin),
+      ).resolves.toEqual([]);
     });
   });
 });

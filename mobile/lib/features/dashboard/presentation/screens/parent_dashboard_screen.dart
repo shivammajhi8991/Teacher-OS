@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../announcements/presentation/screens/announcements_list_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart';
 import '../../../fees/presentation/providers/fees_providers.dart';
@@ -66,6 +67,7 @@ class ParentDashboardScreen extends ConsumerWidget {
       ],
       tabBuilders: {
         1: (context) => const ParentFeesTab(), // docs/07 Phase 5 step 3
+        2: (context) => const AnnouncementsListScreen(), // docs/07 Phase 5 step 4 — read-only
       },
       appBarBottom: appBarBottom,
       dashboardExtra: dashboardExtra,

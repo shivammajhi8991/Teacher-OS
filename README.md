@@ -12,25 +12,38 @@ real-but-mocked payment gateway; Notes with link/student/class/institute sharing
 real-but-local-disk file storage adapter; and Notifications with per-category channel
 preferences, digest batching, and a real-but-mocked push adapter). **Phase 5 (Advanced features)
 is in progress** — step 1 (Assignments & homework), step 2 (Performance tracking: configurable
-per-category metrics), and step 3 (Parent dashboard: child switcher, real summary tiles,
-attendance/performance/fees history, all read-only per docs/06's RBAC matrix) are implemented
-end-to-end in both `backend/` and `mobile/`, verified locally (backend: `npm install`, `tsc`,
-`eslint`, `nest build`, and `npm test` all pass — 128 tests; mobile: hand-verified import paths,
-not yet run through `flutter analyze`/`flutter test` — no Flutter SDK in the environment this was
+per-category metrics), step 3 (Parent dashboard: child switcher, real summary tiles,
+attendance/performance/fees history, all read-only per docs/06's RBAC matrix), and step 4
+(Institute/admin module: branches, teacher invites, revenue-split payouts, and a new
+Announcements module) are implemented end-to-end in both `backend/` and `mobile/`, verified
+locally (backend: `npm install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass — 170
+tests, plus `npm run test:e2e` 7/7 against real Postgres; mobile: hand-verified import paths, not
+yet run through `flutter analyze`/`flutter test` — no Flutter SDK in the environment this was
 built in, see [mobile/README.md](mobile/README.md)).
 
 **Docker became usable partway through step 2**, and `npm run test:e2e` / live manual API
 exercises against real Postgres — both possible in this project for the first time — immediately
-caught and fixed **four real bugs**: a local Postgres port collision (now avoided by
+caught and fixed several real bugs: a local Postgres port collision (now avoided by
 `infra/docker-compose.yml`'s host-port remap), a refresh-token rotation bug where same-second
-token issuance could collide and let a rotated-out token be reused, a missing TypeORM relation
-in both Assignments' and Performance's class-ownership checks (worked in every unit test, since
-a mocked repository doesn't care what `relations` a real query asked for; crashed for real), and
-— the most significant — the fact that nothing in this codebase ever actually linked a
-guardian record to a real parent's account, meaning no parent could ever reach any of the
-guardian-linked read access already built into Fees/Attendance/Notes/Performance since Phase 4.
-All four are detailed in [docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2 and step 3
-entries.
+token issuance could collide and let a rotated-out token be reused, the fact that nothing in
+this codebase ever actually linked a guardian record to a real parent's account (meaning no
+parent could ever reach any of the guardian-linked read access already built into
+Fees/Attendance/Notes/Performance since Phase 4), and — in step 4 — a real,
+previously-flagged-but-unfixed RBAC gap where any institute_admin or super_admin holding the
+role-level `institute.manage` permission could create/update/archive **any** institute, not just
+their own, plus a pre-existing bug where recording a manual cash/UPI/bank-transfer payment
+(`FeesService.recordPayment`, Phase 4 step 6) never actually worked against a real database — it
+silently dropped `idempotencyKey` before saving, a real `NOT NULL UNIQUE` column, so every such
+payment died on a Postgres constraint violation that no mocked-repository unit test could ever
+have caught. A missing-TypeORM-relation bug class — a `find`/`findOne` not requesting a
+`ManyToOne` TypeORM never eager-loads by default — has now recurred **five times**: caught live
+(via a crash) in Assignments' and Performance's class-ownership checks in steps 1–2, then caught
+proactively in step 4 (before ever running the code) in `PayoutsService` and
+`FeesService.confirmGatewayWebhook`, and finally root-caused in step 4's own live testing —
+`TeacherProfilesService.findByUserId()`, shared by roughly 15 call sites across the codebase, had
+never loaded `institute` at all, silently giving every institute-affiliated teacher's newly
+created class `institute: null`. All are detailed in
+[docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2, step 3, and step 4 entries.
 
 Stack decisions locked: Flutter (Riverpod, clean/feature-first architecture) + NestJS + PostgreSQL
 + Redis + FCM, per user selection on 2026-09-04.

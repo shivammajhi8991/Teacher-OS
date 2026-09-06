@@ -4,14 +4,20 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–3)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–4)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
   links a freshly-registered `parent` account to any existing `Guardian` row sharing their
   email/phone (docs/07 Phase 5 step 3) — never the reverse direction. Previously had zero unit
   test coverage of any kind (only the e2e suite touched it); `auth.service.spec.ts` is new
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
-- `modules/institutes` — institutes CRUD (soft-delete only)
+- `modules/institutes` — institutes CRUD (soft-delete only; `create` super_admin-only,
+  `update`/`archive` resource-scoped to the caller's own institute since Phase 5 step 4 — closing
+  a gap this module's own comment used to flag as an unfixed follow-up), branches CRUD
+  (`branches.deleted_at` added in step 4), `teacher_institute_invites` (generate/list/redeem — a
+  short-lived code mirroring `student_invites`), and `institute_teacher_payouts` (read/manage
+  side: set a teacher's `payout_percent`, list role-scoped, mark paid — *generation* happens
+  inside `FeesService`, see below)
 - `modules/teacher-profiles` — `teacher_categories` (seeded with the spec's starter list),
   `teacher_profiles` (create/read/update, owner-only writes), `verification_requests`
   (submit only — admin review UI is a later module)
@@ -41,7 +47,12 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   client-generated key; a gateway payment only confirms via webhook, never the client response.
   `PaymentGatewayAdapter` is a real interface with `MockPaymentGatewayAdapter` as the only
   registered implementation (no real gateway account exists for this project) — its webhook
-  HMAC-signature verification is real, tested logic, not a stub
+  HMAC-signature verification is real, tested logic, not a stub. Since Phase 5 step 4,
+  `recordPayment`/`confirmGatewayWebhook` also call `generatePayoutIfApplicable` — for an
+  institute-collected invoice whose teacher has a configured `payout_percent`, generates one
+  `institute_teacher_payouts` row per CONFIRMED payment (not per invoice, so a partial payment
+  still generates its proportional share), idempotent against a retried webhook via that table's
+  `payment_id` unique constraint
 - `modules/notes` — documents/document_shares/document_access_log: upload-url → confirm →
   share flow, versioning (self-referential `previousVersion`, owner-only), and download
   tracking. Three independent read-access paths (owner, same-institute admin, matching share)
@@ -81,6 +92,17 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   `record`, the same R-not-F pattern Assignments already established. `value` is a validated
   plain string (numeric/percentage/scale_1_5/pass_fail/text per the metric's declared type),
   matching `assignment_submissions.grade`'s same reasoning
+- `modules/announcements` — a new module (Phase 5 step 4): `announcements`, three independent
+  "send" grants (teacher: a class they teach, institute_admin: their own institute, super_admin:
+  platform-wide) but one shared "read" for every role, resolved by building a list of relevant
+  targets for the requester (their institute, their classes, PLATFORM always) then fetching
+  whatever matches — the same approach `NotesService` uses for its own access resolution.
+  `createdBy` (a plain User) replaces docs/03's sketched `teacher_profile_id` (an
+  institute_admin/super_admin sender has none), and a `PLATFORM` target type replaces the
+  sketched `individual` (docs/06 §6.2 names super_admin's grant as literally "platform-wide" with
+  nowhere for that to point). Deliberately does not call `NotificationsService.notify()`
+  per-recipient on creation — a real fan-out belongs on an async job, not a synchronous loop in
+  the request path for what can be a large audience
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging, and
   `storage/` — `StorageAdapter`/`LocalDiskStorageAdapter` (no S3/GCS account exists for this
@@ -89,7 +111,7 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   server-generated (`randomUUID()`), never derived from client input, so it's path-traversal-safe
   by construction; each module keeps its own upload-bytes controller route and `main.ts`
   raw-body registration under its own resource path
-- Ten migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Eleven migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
@@ -97,9 +119,12 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   caller's own data, same as `/auth/me`), assignments (`assignment.manage`/`assignment.read`/
   `assignment.submit` grants, matching docs/06 §6.2 literally), performance
   (`performance.define`/`performance.record`/`performance.read` grants, also matching docs/06
-  §6.2 literally, seeding three example category-default metrics) — see docs/06 §6.2. All ten
-  have now run end-to-end against a real Postgres instance (see "Local setup" below) — the first
-  time in this project's history that was possible.
+  §6.2 literally, seeding three example category-default metrics), and institute-admin
+  (`branches.deleted_at`, `teacher_profiles.payout_percent`, `teacher_institute_invites`,
+  `announcements`, `institute_teacher_payouts` tables, plus `branch.manage`/
+  `teacher_invite.manage`/`teacher_invite.redeem`/`announcement.manage`/`announcement.read`/
+  `payout.manage`/`payout.read` grants) — see docs/06 §6.2. All eleven have now run end-to-end
+  against a real Postgres instance (see "Local setup" below).
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted
@@ -143,6 +168,25 @@ column to a real account — see the Students/Auth entries above. Together, thes
 concrete case for treating a live Postgres + a manual end-to-end pass as a real verification
 step whenever Docker is available, not just `npm test` — see docs/07-roadmap.md's Phase 5 step 2
 and step 3 entries for the full narrative.
+
+Phase 5 step 4 added three more, two caught proactively (before ever running the code, by
+deliberately re-checking every new `find`/`findOne` against the pattern above) and one live: (5)
+`PayoutsService.listPayouts()`'s three role branches, and `FeesService.confirmGatewayWebhook`'s
+payment lookup, were both missing relations their own `toSummary()`/follow-on logic needed —
+fixed before the first test run. (6) The actual root cause behind all of #3/#5:
+`TeacherProfilesService.findByUserId()` — shared by roughly 15 call sites across
+Classes/Students/Assignments/Fees/Notes/Performance/Payouts/Announcements — never requested the
+`institute` relation at all, so every caller reading `teacherProfile.institute` silently got
+`undefined`. Concretely, every class ever created by an institute-affiliated teacher was silently
+getting `institute: null` (`ClassesService.create`), which would have made this very step's
+revenue-split payout feature never fire for a real institute-collected class — caught live while
+manually verifying that exact flow. Fixed at the source rather than patched at each site. (7) A
+pre-existing bug, live since Phase 4 step 6: `FeesService.recordPayment` never carried
+`dto.idempotencyKey` onto the created `Payment` entity, and that column is `NOT NULL UNIQUE` —
+every manual cash/UPI/bank-transfer payment has always failed against a real database. No unit
+test could catch it (a mocked repo accepts an incomplete object); only a real insert against a
+real column constraint could. See docs/07-roadmap.md's Phase 5 step 4 entry for the full
+narrative and the live end-to-end payout verification this all came from.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

@@ -4,6 +4,7 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
+import '../../../announcements/presentation/screens/announcements_list_screen.dart';
 import '../../domain/entities/notification_item.dart';
 import '../providers/notifications_providers.dart';
 import 'notification_preferences_screen.dart';
@@ -13,7 +14,9 @@ import 'notification_preferences_screen.dart';
 /// Profile/Settings) is instead reachable from this screen's own app bar for now — no
 /// Profile/Settings tab has a real screen behind it yet on any dashboard (every one of them
 /// still shows "coming soon"), so routing through one would be building on a screen that
-/// doesn't exist rather than a documented, honest shortcut.
+/// doesn't exist rather than a documented, honest shortcut. Same reasoning covers Student's
+/// "Announcements | ... | Notification center" (docs/08 §8.2) — the campaign icon here is that
+/// entry point.
 class NotificationCenterScreen extends ConsumerWidget {
   const NotificationCenterScreen({super.key});
 
@@ -49,6 +52,13 @@ class NotificationCenterScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Notifications'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.campaign_outlined),
+            tooltip: 'Announcements',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AnnouncementsListScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.tune),
             tooltip: 'Preferences',

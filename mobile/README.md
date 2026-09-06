@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–3)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–4)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -27,7 +27,10 @@ inventory and flows this scaffold implements.
 - `core/theme`, `core/widgets` — design tokens + the empty/loading/error/sync-status widgets from
   docs/08 §8.6
 - `features/auth` — full clean-architecture vertical slice: register, login, logout, session
-  restore on cold start, wired to Riverpod (`AuthNotifier`)
+  restore on cold start, wired to Riverpod (`AuthNotifier`). `AppUser` gained `instituteId`
+  (Phase 5 step 4) — `GET /auth/me`'s response always carried each role's own `instituteId`, but
+  `MeResponseDto`/`AppUser` only ever kept `activeRole`; the Teachers roster and the
+  institute-wide announcement compose action both need it without a separate round trip
 - `features/onboarding` — category grid (loaded from the backend) → progressive profile form
   (Basics / Teaching details / Fees & availability, per docs/08 §8.5) via a `Stepper`; a fresh
   teacher registration is routed here explicitly before landing on the dashboard. Document
@@ -116,12 +119,26 @@ inventory and flows this scaffold implements.
   `ChildPerformanceScreen`) are reachable from a small "view history" card. The Fees tab
   (`ParentFeesTab`) is read-only by design — docs/06 §6.2 gives Parent no write access to
   payments, so there's no "Record payment" button here unlike the Teacher-facing Fees section.
-  Announcements and Profile stay "coming soon" (Announcements belongs to the Institute/admin
-  module, Phase 5 step 4; Profile is generic, not part of this step)
+  Its Announcements tab is now wired too (see `features/announcements` below); Profile stays
+  "coming soon" (generic, not part of any step yet)
+- `features/announcements` — docs/07-roadmap.md's Phase 5 step 4. One shared
+  `AnnouncementsListScreen`, reached differently per role exactly as docs/08 §8.2 specifies for
+  each: Parent's own dashboard tab (was "coming soon"), Student's from the Notification center
+  (a new campaign-icon action there, next to Preferences), and Institute Admin's dashboard quick
+  action (a card linking into the same screen with `composeTargetType: 'institute'`, since only
+  Institute Admin gets a compose FAB in this pass). Teacher holds `announcement.manage` on the
+  backend but has no docs/08-listed screen for it — a documented scope cut, not an oversight; the
+  doc's own screen inventory only lists Announcements for Student/Parent/Institute Admin
+- `features/institutes` — docs/07-roadmap.md's Phase 5 step 4. `TeacherRosterScreen` (Institute
+  Admin's Teachers tab): roster list + an invite-code dialog mirroring `StudentListScreen`'s own
+  (generate a code, show it once, no in-app delivery). Payout-config *editing* has no mobile
+  surface yet — the roster still shows a teacher's configured `payoutPercent`, read-only; setting
+  it is a documented scope cut matching Branches' own precedent (real on the backend, no CRUD UI
+  this pass)
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
-  docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student; the rest
-  still show "coming soon")
+  docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student, Teachers
+  for Institute Admin since step 4; the rest still show "coming soon")
 - `l10n/` — English + Hindi ARB files covering everything built so far (docs/05 §5.6)
 
 Every other `features/*` folder is a stub `README.md` pointing at its roadmap step and doc

@@ -17,6 +17,16 @@ import { CreateTeacherProfileDto } from './dto/create-teacher-profile.dto';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { User } from '../users/entities/user.entity';
+import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
+
+export interface TeacherRosterEntry {
+  id: string;
+  fullName: string;
+  email?: string;
+  headline?: string;
+  verificationStatus: VerificationStatus;
+  payoutPercent: string | null;
+}
 
 @Injectable()
 export class TeacherProfilesService {
@@ -106,8 +116,64 @@ export class TeacherProfilesService {
     return profile;
   }
 
+  // A real, previously-undiscovered bug (caught live testing the Phase 5 step 4 payouts flow):
+  // this used to omit `relations`, so every one of this method's ~15 call sites across
+  // Classes/Students/Assignments/Payouts/etc. that read `teacherProfile.institute` got `undefined`
+  // back — silently treated as "no institute" by every `?? null`/optional-chaining fallback.
+  // Concretely, every class ever created by an institute-affiliated teacher was silently getting
+  // `institute: null` (classes.service.ts's `create`), which would have made the revenue-split
+  // payout feature this same step adds never fire for a real institute-collected class. The
+  // fourth+ instance of this project's recurring "missing TypeORM relation" bug class — this
+  // time the root cause was one shared method, not one call site.
   async findByUserId(userId: string): Promise<TeacherProfile | null> {
-    return this.profileRepo.findOne({ where: { user: { id: userId } } });
+    return this.profileRepo.findOne({
+      where: { user: { id: userId } },
+      relations: { institute: true },
+    });
+  }
+
+  // docs/08 §8.2 Institute Admin "Teachers list / detail: Roster, invite, verification status,
+  // payout config" — this covers roster + verification status + payout_percent; invite
+  // generation is TeacherInvitesService's own flow, and a dedicated payout-config *editing* UI
+  // is PayoutsController's `setPayoutPercent` (mobile surface for it is this pass's documented
+  // scope cut, matching Branches/Payouts precedent). Same `passwordHash`-safety concern as
+  // findById() above — an explicit `select` keeps it, and everything else on User, out of the
+  // query entirely.
+  async listByInstitute(
+    instituteId: string,
+    requester: AuthenticatedUser,
+  ): Promise<TeacherRosterEntry[]> {
+    if (
+      requester.activeRole !== 'super_admin' &&
+      (requester.activeRole !== 'institute_admin' ||
+        requester.instituteId !== instituteId)
+    ) {
+      throw new ForbiddenException({
+        code: 'NOT_AUTHORIZED_FOR_INSTITUTE',
+        message:
+          "You do not have permission to view this institute's teacher roster",
+      });
+    }
+    const profiles = await this.profileRepo.find({
+      where: { institute: { id: instituteId } },
+      relations: { user: true },
+      select: {
+        id: true,
+        headline: true,
+        verificationStatus: true,
+        payoutPercent: true,
+        user: { id: true, fullName: true, email: true },
+      },
+      order: { createdAt: 'DESC' },
+    });
+    return profiles.map((p) => ({
+      id: p.id,
+      fullName: p.user.fullName,
+      email: p.user.email,
+      headline: p.headline,
+      verificationStatus: p.verificationStatus,
+      payoutPercent: p.payoutPercent ?? null,
+    }));
   }
 
   async update(

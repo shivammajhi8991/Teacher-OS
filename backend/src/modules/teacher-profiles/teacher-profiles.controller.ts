@@ -61,4 +61,16 @@ export class TeacherProfilesController {
       dto,
     );
   }
+
+  // docs/08 §8.2 Institute Admin "Teachers list ... Roster" — lives here (not
+  // InstitutesController) the same way FeesController's `institutes/:id/revenue-summary`
+  // does: the module that owns the underlying data owns the institute-scoped read of it.
+  @RequirePermission('teacher_profile.read')
+  @Get('institutes/:id/teachers')
+  listByInstitute(
+    @Param('id') instituteId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.teacherProfilesService.listByInstitute(instituteId, user);
+  }
 }

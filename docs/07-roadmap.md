@@ -444,8 +444,124 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    green (128 tests, 5 new for AuthService's guardian-linking + baseline register() coverage);
    `npm run test:e2e` 7/7. Mobile hand-verified for import/path and API-shape correctness only —
    still no Flutter SDK in this environment.
-4. **Institute/admin module** — branches, teacher invites, institute-wide announcements,
-   revenue-split payouts (docs/01 §1.3).
+4. **Institute/admin module ✅ implemented** — `backend/src/modules/institutes` (branches,
+   teacher invites, revenue-split payouts) and a new `backend/src/modules/announcements`,
+   plus, on mobile, a shared **Announcements** screen (Parent's own tab, Student's entry from
+   the Notification center per docs/08 §8.2, Institute Admin's Dashboard quick action with
+   compose) and the Institute Admin dashboard's **Teachers** tab (roster + invite).
+
+   **Closed a real, previously-flagged-but-unfixed RBAC gap**: `InstitutesController`'s own
+   comment used to say resource-level scoping ("only YOUR institute") was "a Phase 4 follow-up —
+   flagged, not silently skipped." Until this step, any institute_admin *or* super_admin holding
+   the role-level `institute.manage` permission could create/update/archive **any** institute, not
+   just their own — contradicting docs/06 §6.2's literal "F (own institute)" grant for
+   institute_admin. Fixed by threading `requester: AuthenticatedUser` through
+   `create`/`update`/`archive` with a private `assertWriteAccess` (super_admin bypass;
+   institute_admin restricted to `requester.instituteId === id`), and restricting `create()` to
+   super_admin only — an institute_admin manages an *existing* institute, not spins up new ones,
+   per the matrix.
+
+   **Branches** (real since Phase 4 step 1 but never exposed) get their first CRUD pass —
+   `branches.deleted_at` added (missing from the original entity; every other table in this
+   schema soft-deletes). Nothing else in this codebase references a branch yet
+   (Class/TeacherProfile scope by institute only) — a documented scope boundary, not an oversight.
+
+   **Teacher invites** mirror `StudentInvite`'s shape exactly: a short-lived code
+   (`randomBytes(5).toString('hex')`), redeemed once. Redeeming joins an *existing* teacher
+   profile to an institute (a teacher must already have completed onboarding, Phase 4 step 2) —
+   rejects outright if that profile is already affiliated with a (possibly different) institute,
+   rather than silently reassigning it; an explicit transfer flow is a documented scope cut.
+
+   **Revenue-split payouts** close a gap docs/03 §3.7 flagged from the start ("needs a
+   payout-percent config that doesn't exist on any entity yet") — `teacher_profiles.payout_percent`
+   answers it directly. `InstituteTeacherPayout` generates one row per **CONFIRMED payment**, not
+   per invoice (`payment_id`, unique — an addition beyond docs/03's sketch) so a partially-paid
+   invoice generates a proportional payout as each payment lands, and a retried gateway webhook
+   can never double-generate one for the same payment. Generation lives inside `FeesService`
+   itself (`generatePayoutIfApplicable`, called from both `recordPayment` and
+   `confirmGatewayWebhook`) rather than via a new Fees→Institutes service call — it already has
+   payment/invoice/teacherProfile loaded at that point, and the two modules just share the entity,
+   matching this codebase's "each module injects entities it needs directly" convention.
+
+   **Announcements** get their own new module rather than living inside Institutes — three
+   independent "send" grants (teacher: own class, institute_admin: own institute, super_admin:
+   platform) but one shared "read" for every role, resolved the same way `NotesService` resolves
+   "what am I allowed to see": build a list of relevant targets for the requester (their
+   institute, their classes, PLATFORM always), then fetch whatever matches. Two deliberate
+   deviations from docs/03 §3.8's sketch: `createdBy` (a plain User) replaces
+   `teacher_profile_id` (an institute_admin/super_admin sender has no teacher profile at all), and
+   a new `PLATFORM` target type replaces the sketched `'individual'` (neither docs/03 nor docs/06
+   ever specified who could use `'individual'` or why, while docs/06 §6.2 names super_admin's
+   grant as literally "platform-wide" with nowhere for that to point).
+
+   **This step's `find`/`findOne` calls got caught proactively twice, before ever running the
+   code**, by deliberately re-checking every new one against the pattern that bit Assignments and
+   Performance via live testing earlier: none of `PayoutsService.listPayouts()`'s three role
+   branches requested `relations: { teacherProfile: true, invoice: true }` despite `toSummary()`
+   reading both, and `FeesService.confirmGatewayWebhook`'s payment lookup was missing
+   `teacherProfile`/`institute` on `invoice` — both fixed before the first test run.
+
+   **Then live testing caught a fifth, more consequential instance — the actual root cause behind
+   the other four.** Manually exercising the new payout-generation flow end-to-end (redeem a
+   teacher invite → create a class as that teacher → confirm a payment) surfaced `institute: null`
+   on a class created by a teacher who had just joined an institute. The cause:
+   `TeacherProfilesService.findByUserId()` — a shared method with **~15 call sites** across
+   Classes, Students, Assignments, Fees, Notes, Performance, Payouts, and Announcements — never
+   requested the `institute` relation at all. Every caller reading `teacherProfile.institute` got
+   `undefined` back, silently swallowed by an `?? null` or `?.` fallback at each site. Concretely:
+   every class ever created by an institute-affiliated teacher was silently getting `institute:
+   null` (`ClassesService.create`) — which would have made this very step's revenue-split payout
+   feature never fire for a real institute-collected class, the one scenario it exists for. Fixed
+   at the source (`findByUserId` now always loads `institute`) rather than patching each call
+   site, which also let two call sites that had been working around the gap with their own
+   redundant re-query (`TeacherInvitesService.redeemInvite`, `AnnouncementsService
+   .getRelevantTargets`'s teacher branch) simplify back down to using the method's own result.
+   TypeORM never eager-loads a `ManyToOne` unless a relation is declared `eager: true`
+   (`TeacherProfile.teacherCategory` is the only one in this codebase that does) or explicitly
+   requested — five instances of this exact bug class have now surfaced in this project, and this
+   one was root-caused rather than patched at its symptom.
+
+   Mobile: `GET /auth/me`'s response already carried each role's own `instituteId`
+   (`AuthService.me`) but the client discarded it — `MeResponseDto`/`AppUser` only ever kept
+   `activeRole`. Fixed (`AppUser.instituteId`) since the Teachers roster and the institute-wide
+   announcement compose action both need to know the signed-in institute_admin's own institute
+   without a separate round trip. A new `backend/src/modules/teacher-profiles` route,
+   `GET institutes/:id/teachers` (gated by the existing `teacher_profile.read` permission, no new
+   grant needed), backs the roster — placed there rather than on `InstitutesController`, the same
+   way `FeesController`'s `institutes/:id/revenue-summary` already lives in the module that owns
+   the underlying data. Payout-config *editing* has no mobile surface yet — a documented scope
+   cut matching Branches' own precedent; the roster still surfaces the configured percent,
+   read-only.
+
+   **A sixth bug, this one pre-existing since Phase 4 step 6 (Fees), surfaced while setting up
+   that live payout test**: recording a manual cash/UPI/bank-transfer payment
+   (`FeesService.recordPayment`) has never actually worked against a real database.
+   `paymentRepo.create({...})` never carried `dto.idempotencyKey` through onto the entity, and
+   `payments.idempotency_key` is a real `NOT NULL UNIQUE` column — every call died with a
+   Postgres constraint violation. Every unit test for this path mocks `paymentRepo.create`/`save`
+   as pass-through functions that happily accept an incomplete object, so nothing before this
+   caught it; only a real insert against a real column constraint could. Fixed by adding the one
+   missing field, with a new regression test asserting `idempotencyKey` specifically appears in
+   what gets passed to `create()` (a mocked-repo test can't catch the missing *column*, but it can
+   catch the missing *field*, which is what actually regressed here).
+
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (170 tests — 42 new, covering InstitutesService's resource-level scoping,
+   TeacherInvitesService's redemption edge cases, PayoutsService's role-scoped listing and
+   idempotent-generation guard, AnnouncementsService's per-role send/read scoping, the new
+   teacher-roster listing, and the `recordPayment` idempotency-key regression guard);
+   `npm run test:e2e` 7/7; migration applied cleanly against live Postgres. Manually exercised
+   end-to-end against real Postgres: an institute_admin's every write and read (institute update,
+   branch create/list, teacher-invite create/list, roster view) rejected with 403 against a
+   second, unrelated institute; a teacher invite generated by that admin and redeemed by a real
+   teacher account, joining it to the institute; a class created by that teacher correctly
+   institute-linked (confirming the `findByUserId` fix); a fee structure, invoice, and manual cash
+   payment recorded against it generating a real `institute_teacher_payouts` row at the
+   configured 30% (₹1000 payment → ₹300 payout), marked paid, with a same-idempotency-key retry
+   confirmed to return the existing payment and generate no second payout; a teacher's
+   class-targeted announcement and the admin's institute-wide one both correctly surfaced to an
+   enrolled student's `GET /announcements`. Mobile hand-verified for import/path and API-shape
+   correctness only — still no Flutter SDK in this environment.
 5. **Reports & analytics** — PDF/CSV export, async export jobs per docs/04 §4.7.
 6. **Calendar unification** — conflict detection surfaced in UI (docs/03 §3.5).
 7. **CSV import** for bulk student onboarding.

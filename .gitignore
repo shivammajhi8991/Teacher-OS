@@ -20,6 +20,11 @@ mobile/android/.gradle/
 mobile/**/generated_plugin*
 *.g.dart
 *.freezed.dart
+# flutter gen-l10n output (pubspec.yaml's `generate: true`) — regenerated from lib/l10n/*.arb by
+# any `flutter pub get`/`analyze`/`build`/`test`, same "don't commit codegen" policy as the two
+# patterns above. Only ever existed in this repo's working tree once a real Flutter SDK first ran
+# here (Phase 6 step 1) — never committed.
+mobile/lib/l10n/app_localizations*.dart
 
 # Admin web (Flutter Web target, docs/02 §2.8)
 admin-web/build/

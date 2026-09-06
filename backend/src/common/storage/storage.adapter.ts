@@ -26,6 +26,12 @@ export interface StorageAdapter {
   createPresignedUpload(uploadPathPrefix: string): Promise<PresignedUpload>;
   objectExists(objectKey: string): Promise<boolean>;
   readObject(objectKey: string): Promise<Buffer>;
+  /**
+   * docs/04 §4.8 (Phase 6 security review): implementations must reject an executable or
+   * script/markup payload by its actual bytes (see file-signature.util.ts), regardless of
+   * anything the caller declares — this is the one choke point every upload (Notes, Assignments)
+   * passes through, so the check belongs here rather than duplicated per calling service.
+   */
   writeObject(objectKey: string, data: Buffer): Promise<void>;
   deleteObject(objectKey: string): Promise<void>;
 }

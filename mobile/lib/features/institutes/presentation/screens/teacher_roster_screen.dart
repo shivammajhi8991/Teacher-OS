@@ -128,7 +128,7 @@ class _VerificationBadge extends StatelessWidget {
     };
     return Chip(
       label: Text(status, style: TextStyle(color: color, fontSize: 12)),
-      backgroundColor: color.withOpacity(0.1),
+      backgroundColor: color.withValues(alpha: 0.1),
       side: BorderSide.none,
       visualDensity: VisualDensity.compact,
     );

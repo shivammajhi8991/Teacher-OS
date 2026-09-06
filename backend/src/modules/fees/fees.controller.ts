@@ -9,6 +9,7 @@ import {
   RawBodyRequest,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { FeesService } from './fees.service';
 import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
@@ -87,7 +88,12 @@ export class FeesController {
     return this.feesService.createCreditNote(invoiceId, user, dto);
   }
 
+  // docs/04 §4.8 "stricter limits on ... payment endpoints" — every route on this controller that
+  // actually moves money gets a cap well below the 100/min global default, on top of whatever
+  // permission check already applies. Tracked per-authenticated-user (app.module.ts's
+  // getTracker), not per-IP, for every route below except the public webhook, which has no user.
   @RequirePermission('fee.manage')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('payments')
   recordPayment(
     @CurrentUser() user: AuthenticatedUser,
@@ -99,6 +105,7 @@ export class FeesController {
   // fee.read (not fee.manage) — a student/parent initiates their own gateway payment; scoping is
   // enforced in the service (self/linked-guardian), not by requiring the manage-level permission.
   @RequirePermission('fee.read')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('payments/gateway/initiate')
   initiateGatewayPayment(
     @CurrentUser() user: AuthenticatedUser,
@@ -111,7 +118,11 @@ export class FeesController {
   // (FeesService.confirmGatewayWebhook -> PaymentGatewayAdapter) is what authenticates the call
   // instead of a JWT. Needs the raw request body for HMAC verification, hence `app.rawBody: true`
   // in main.ts and reading `req.rawBody` here rather than the JSON-parsed `req.body`.
+  // IP-tracked (no authenticated user on a webhook call) — capped higher than the authenticated
+  // payment routes above since a real gateway can legitimately fire many callbacks in a burst,
+  // but still well under the global default as defense-in-depth against abuse of a public route.
   @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('payments/gateway/webhook')
   async gatewayWebhook(
     @Req() req: RawBodyRequest<Request>,
@@ -125,6 +136,7 @@ export class FeesController {
   }
 
   @RequirePermission('fee.manage')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('payments/:id/refund')
   refundPayment(
     @Param('id') paymentId: string,

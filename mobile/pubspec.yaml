@@ -38,10 +38,14 @@ dependencies:
   # docs/03 §3.9 — client UUIDs become the real primary key on server confirmation).
   uuid: ^4.5.1
 
-  # i18n — docs/05 §5.6.
+  # i18n — docs/05 §5.6. intl's constraint is dictated by flutter_localizations' own transitive
+  # requirement (bumped by a Flutter SDK release after this was first pinned — Phase 6 CI caught
+  # the resulting version-solve failure, since this was never `pub get`-checked against a real SDK
+  # before now), not chosen independently — keep it in step with whatever flutter_localizations
+  # needs rather than pinning a ceiling of its own.
   flutter_localizations:
     sdk: flutter
-  intl: ^0.19.0
+  intl: ^0.20.3
 
 dev_dependencies:
   flutter_test:

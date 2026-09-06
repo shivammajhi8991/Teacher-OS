@@ -825,13 +825,134 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
 
    This completes Phase 5.
 
-## Phase 6 — Testing & production deployment
+## Phase 6 — Testing & production deployment (in progress)
 
-- Full integration-test suite green on CI (docs/05 §5.7 list).
-- Security review pass against docs/04 §4.8 baseline + a dedicated pass for the OWASP Mobile Top 10 and OWASP API Top 10.
-- Load testing on attendance-bulk-mark and invoice-generation endpoints specifically (the two highest write-volume paths at term-start/month-start).
-- App Store / Play Store submission (privacy nutrition labels, data-safety form — both need the data-handling map from docs/03 to fill out accurately, particularly minors' data per docs/01 §1.3 consent handling).
-- Staged rollout (Play Console staged rollout %, TestFlight external testing) rather than 100% release on day one.
+1. **CI pipeline ✅ implemented** — `.github/workflows/backend-ci.yml` and `mobile-ci.yml`,
+   implementing this phase's "Full integration-test suite green on CI" (docs/05 §5.7) item.
+
+   **Backend**: `tsc --noEmit` / `eslint` (no `--fix` — CI fails rather than silently rewriting
+   files, unlike the local `npm run lint` script) / `nest build` / `migration:run` / `npm test` /
+   `npm run test:e2e`, against a real Postgres 16 **and** Redis 7 service container (Redis became
+   necessary mid-step — see finding below). Passed clean on its very first real run, validating
+   this project's own discipline of running the full local verification sequence before every
+   commit throughout Phase 4–5.
+
+   **Mobile**: `flutter pub get` / `flutter analyze` / `flutter test` on a real GitHub Actions
+   Flutter SDK (3.47.2 stable) — the first time anything in `mobile/` has ever run through real
+   Flutter tooling. No Flutter SDK has existed in this project's dev environment at any point
+   before this step (confirmed originally by the complete absence of `android/`/`ios`/`web`
+   platform folders — `flutter create` was never run); every module across Phase 4–5 was
+   hand-verified for Dart syntax instead, by design, and documented as such in every step's
+   closing summary. This step downloaded a real Flutter SDK locally specifically to reproduce and
+   fix the CI failure directly rather than iterating blind against GitHub's own runners.
+
+   **Four real, previously-undiscoverable bugs found, none catchable without a real SDK:**
+
+   1. **`flutter pub get` failed outright.** `intl: ^0.19.0` (pinned when this pubspec was first
+      written) conflicts with `flutter_localizations`' own transitive requirement of `intl
+      ^0.20.3` in the current Flutter stable release — a dependency this project's `intl` version
+      was never actually chosen independently, just never re-checked against a real SDK. Fixed by
+      loosening the constraint to `^0.20.3` — mobile/pubspec.yaml is now explicit that this
+      version tracks whatever `flutter_localizations` needs, not an independent choice.
+   2. **A stale test fixture failed `flutter analyze` outright.**
+      `test/features/attendance/quick_attendance_screen_test.dart`'s `_FakeAttendanceRepository`
+      (written in Phase 4 step 5) was never updated when Phase 5 step 3 added
+      `getStudentAttendanceHistory` to `AttendanceRepository` — a missing-interface-method compile
+      error, invisible until `flutter analyze` actually ran for the first time. Fixed by adding
+      the missing method to the fake.
+   3. **A genuine Stepper bug in the onboarding screen**, found by `flutter test` (not
+      `flutter analyze` — this only manifests at runtime): Flutter's vertical `Stepper` calls
+      `controlsBuilder` once **per step**, not once for the currently active step — every step's
+      `AnimatedCrossFade` keeps both its collapsed and expanded child in the widget tree
+      simultaneously (that's how the cross-fade animates), and `Stepper` never disables a
+      non-current step's own `onStepContinue`/`onStepCancel` handlers. `onboarding_screen.dart`'s
+      `controlsBuilder` had been written assuming it ran once for the active step, so it silently
+      built 3 extra, always-tappable "ghost" Continue/Back buttons — invisible to a sighted user
+      only because their containing `AnimatedCrossFade` child happened to be collapsed to zero
+      size, but findable by a widget test and reachable by a screen reader's focus traversal. A
+      second, subtler bug rode along: the Continue/Finish label compared `_currentStep` (this
+      widget's own field, identical across all 4 calls) against `3`, rather than
+      `details.stepIndex` (each call's own step) — every step's button would have flipped to
+      "Finish" together the moment `_currentStep` reached 3, not just that step's own. Fixed by
+      checking `details.isActive` (`currentStep == stepIndex`, a field `ControlsDetails` exists
+      specifically for this) and returning an empty widget for every inactive step's builder call,
+      and using `details.stepIndex` for the label. Neither bug was reachable by this codebase's
+      own hand-review discipline — both are runtime/widget-tree behaviors of a specific Flutter
+      widget, not something readable from the source alone.
+   4. **A handful of `deprecated_member_use`/`prefer_const_constructors` infos** across
+      Attendance/Institutes/Students/Classes screens — `Color.withOpacity` → `.withValues(alpha:)`
+      and a missing `const`, both fixed directly; a fifth (`DropdownButtonFormField`'s `value:` →
+      `initialValue:`) was deliberately left as the still-working deprecated form rather than
+      changed, since `initialValue` is a genuine behavioral difference (seeds the field once
+      rather than staying in sync with state on every rebuild) this environment still has no way
+      to visually verify.
+
+   Verified: `flutter analyze` → "No issues found!"; `flutter test` → all 9 widget/unit tests
+   passing (previously 1 failing before fix #3, 1 compile error before fix #2). Backend's full
+   local sequence re-confirmed green throughout (261 tests at the point this step's other work
+   landed — see step 2 below for why the count moved from Phase 5's 233).
+
+2. **Security review pass ✅ implemented** — a code-level pass against every docs/04 §4.8 bullet
+   plus a dedicated OWASP API Top 10 / OWASP Mobile Top 10 sweep. Full narrative in docs/04 §4.8's
+   own new "Phase 6 security review" subsection; summarized here.
+
+   **Two real, fixable gaps found and fixed:**
+
+   - **Rate limiting was never actually "via Redis"** — `ThrottlerModule.forRoot`'s default
+     storage is an in-memory `Map`, the direct cause of this project's own recurring "the throttle
+     store survives a hot-reload in confusing ways" gotcha noted in several earlier steps. Fixed
+     with a real `RedisThrottlerStorageService` (a Redis-sorted-set sliding window), per-user
+     tracking (the throttler's `getTracker` now prefers `req.user.userId` over IP, which required
+     reordering `app.module.ts`'s guards so `JwtAuthGuard` runs before `ThrottlerGuard`), and
+     `@Throttle` added to every payment-touching endpoint on `FeesController` (none had one
+     before). This is also **why backend-ci.yml needed a Redis service container** added mid-step
+     — the app now genuinely fails to boot without a reachable Redis, which it never did before.
+   - **File uploads were never actually validated by content** — `LocalDiskStorageAdapter` wrote
+     whatever bytes arrived, no matter what. Fixed with `file-signature.util.ts`'s magic-byte
+     sniffing: a blanket reject of executable/HTML-script content at the one `writeObject` choke
+     point every upload passes through, plus a declared-`fileType`-vs-actual-bytes cross-check in
+     `NotesService.createDocument` (the one place with an actual declared type to check against).
+
+   Both fixed gaps were verified **live** against real Postgres + Redis, not just via unit tests:
+   two different users' hits to the same throttled route landed under two separate Redis keys
+   (proving per-user scoping); 21 rapid requests to the newly-`@Throttle`d `/payments` correctly
+   let the first 20 through and `429`'d the 21st, while an unrelated endpoint for that same user
+   kept working normally; a fake `.exe` upload was rejected before touching disk; a real PDF
+   declared as `fileType: 'image'` was rejected with a clear error; the same PDF declared correctly
+   succeeded.
+
+   **A project-wide audit, not just a spot check**: every one of the 18 call sites across
+   `src/modules/` loading a related `User` entity was checked against the "never load a related
+   User without a column-restricted `select`" rule this codebase has already caught violations of
+   three separate times (`TeacherProfilesService`, `StudentsService`, Phase 5 step 8's
+   `VerificationReviewService`). 17 already had it; the 18th
+   (`NotificationsService.runDigestBatch`) didn't, though it turned out not to be an actual leak
+   (it's `@Cron`-only, never controller-exposed) — tightened anyway for consistency. Recommended,
+   not done this pass: promote this from "everyone remembers to add `select`" to a lint rule or a
+   shared select-builder, since three independent recurrences across this project's history is a
+   pattern, not a coincidence.
+
+   **Named, not silently skipped**: HTTPS/HSTS termination and "served from a separate cookie-less
+   domain" for uploads are both real infrastructure this project has never provisioned (no
+   production deployment target exists yet) — `helmet()`'s own HSTS header and serving every
+   download as `application/octet-stream` are the application-layer mitigations already in place,
+   not full substitutes. `npm audit`'s 28 pre-existing dependency vulnerabilities (unchanged by
+   this pass — confirmed against the pre-Phase-6 lockfile too) are flagged as needing their own
+   dedicated upgrade-and-reverify pass rather than a drive-by `--force` fix that risks breaking
+   this project's `@nestjs/*` version alignment.
+
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all green
+   (261 tests, 28 new: file-signature sniffing, the local-disk adapter's real-filesystem rejection
+   test, the Redis throttler storage's sliding-window logic, plus regression coverage on
+   `NotesService.createDocument`); `npm run test:e2e` 7/7 — which itself needed a fix once the
+   throttler went live: login/register are IP-tracked (no user yet), so repeated runs of the e2e
+   suite against the same Redis instance were genuinely tripping the 5/60s login limit left over
+   from the previous run, a real, previously-nonexistent flakiness source now guarded against by
+   flushing Redis in the suite's own `beforeAll`.
+
+3. **Not yet started**: load testing (attendance-bulk-mark, invoice-generation), App Store / Play
+   Store submission, and staged rollout all remain open — each needs infrastructure or accounts
+   (a load-testing target environment, developer accounts on both stores) this pass didn't set up.
 
 ## Phase 7 — Future-ready (explicitly deferred, architecture already accommodates)
 

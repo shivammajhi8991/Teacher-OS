@@ -264,9 +264,14 @@ export class NotificationsService {
     channel:
       NotificationChannel.DIGEST_DAILY | NotificationChannel.DIGEST_WEEKLY,
   ): Promise<{ usersNotified: number; notificationsDelivered: number }> {
+    // Phase 6 security review: this result never reaches an HTTP response (runDigestBatch is
+    // @Cron-triggered only, never controller-exposed) so the missing `select` here was never an
+    // actual leak — still tightened for consistency with every other `relations: { user: true }`
+    // load in this codebase (pushNow only ever reads `.user.id`, never anything else).
     const pending = await this.notificationRepo.find({
       where: { deliveryChannel: channel, deliveredAt: IsNull() },
       relations: { user: true },
+      select: { id: true, title: true, body: true, user: { id: true } },
       order: { createdAt: 'ASC' },
     });
 

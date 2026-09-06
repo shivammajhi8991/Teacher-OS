@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5, complete, all 8 steps)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5, complete, all 8 steps — plus Phase 6 steps 1–2)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
   links a freshly-registered `parent` account to any existing `Guardian` row sharing their
@@ -74,8 +74,10 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   split). `PushNotificationAdapter` is a real interface with `MockPushNotificationAdapter` as
   the only registered implementation (no Firebase project exists for this project). Digest
   batching (`runDigestBatch`) is pure, tested logic triggered by an in-process `@Cron`
-  (`@nestjs/schedule`) rather than a BullMQ repeatable job — no Redis is wired up anywhere in
-  this codebase yet, and docs/02 §2.5 frames BullMQ as a scale concern, not an MVP one. Fees
+  (`@nestjs/schedule`) rather than a BullMQ repeatable job — still no BullMQ queue in this
+  codebase (docs/02 §2.5 frames that as a scale concern, not an MVP one), though Redis itself is
+  no longer unused: Phase 6's rate limiter is genuinely Redis-backed now (see `common/throttler/`
+  below). Fees
   and Notes both call `notify()` as real integration points (payment confirmed/invoice issued,
   document shared to a student)
 - `modules/assignments` — assignments/assignment_submissions: create (class- or single-student-
@@ -166,7 +168,15 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   `uploads/` object-key namespace through one adapter instance. Object keys are always
   server-generated (`randomUUID()`), never derived from client input, so it's path-traversal-safe
   by construction; each module keeps its own upload-bytes controller route and `main.ts`
-  raw-body registration under its own resource path
+  raw-body registration under its own resource path. `storage/file-signature.util.ts` (Phase 6
+  security review) adds real magic-byte sniffing to that adapter's `writeObject` — an executable
+  or HTML/script payload is rejected outright regardless of what (if anything) is ever declared;
+  `NotesService.createDocument` separately cross-checks a document's declared `fileType` against
+  its actual uploaded bytes, the one place with a real declared type to check against.
+  `common/throttler/redis-throttler-storage.service.ts` (also Phase 6) replaces
+  `@nestjs/throttler`'s default in-memory storage with a real Redis-sorted-set sliding window —
+  see docs/04 §4.8's security review subsection for the full rationale and the guard-reordering
+  (`app.module.ts`) this needed for per-authenticated-user (not just per-IP) tracking
 - Sixteen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
@@ -298,6 +308,25 @@ router sent both `institute_admin` and `super_admin` to the same institute-scope
 which a `super_admin` normally has as `null`. No test had ever exercised a `super_admin` mobile
 login before this step, so the bug had been invisible; caught in code review while wiring up the
 new admin-panel route, fixed by giving `super_admin` its own landing route.
+
+Phase 6's security review found two more, both real gaps rather than logic bugs: (15) rate
+limiting was never actually Redis-backed — `ThrottlerModule.forRoot`'s default storage is an
+in-memory `Map`, the direct cause of this project's own recurring "the throttle store survives a
+hot-reload in confusing ways" gotcha noted in several earlier steps — and payment endpoints had no
+throttle at all. Fixed with `RedisThrottlerStorageService` (a real sliding-window sorted set) and
+`@Throttle` added to every payment-touching route on `FeesController`; getting per-authenticated-
+user tracking working also meant reordering `app.module.ts`'s guards so `JwtAuthGuard` runs before
+`ThrottlerGuard`. (16) File uploads were never validated by their actual content — the raw-bytes
+upload route never even received a client-declared MIME type to distrust, so nothing checked
+anything. Fixed with `file-signature.util.ts`'s magic-byte sniffing (see the `common/` entry
+above). Both were verified live against real Postgres + Redis, not just unit-tested: two different
+users' hits to the same throttled route produced two separate Redis keys; 21 rapid requests to
+`/payments` correctly let 20 through and `429`'d the 21st while a different endpoint for that same
+user kept working; a fake `.exe` upload was rejected before touching disk. Full narrative in
+docs/04 §4.8's own "Phase 6 security review" subsection, including a project-wide audit of every
+place a related `User` is loaded (this bug class' 3rd, 4th, and — turned out not to be an actual
+leak — a would-be 5th recurrence) and the deliberate scope cuts (HTTPS/HSTS termination, a
+separate upload domain, the pre-existing `npm audit` findings) named rather than silently ignored.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

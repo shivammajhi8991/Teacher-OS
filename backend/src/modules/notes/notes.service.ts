@@ -36,6 +36,7 @@ import {
   STORAGE_ADAPTER,
   StorageAdapter,
 } from '../../common/storage/storage.adapter';
+import { matchesDeclaredFileType } from '../../common/storage/file-signature.util';
 
 export interface DocumentSummary {
   id: string;
@@ -118,6 +119,21 @@ export class NotesService {
       throw new BadRequestException({
         code: 'UPLOAD_NOT_FOUND',
         message: 'No uploaded file found for this objectKey — upload it first',
+      });
+    } else if (
+      !matchesDeclaredFileType(
+        await this.storage.readObject(dto.objectKey),
+        dto.fileType,
+      )
+    ) {
+      // docs/04 §4.8 (Phase 6 security review) — "never trust client-declared MIME" applied at
+      // the one point this module actually has a declared type to check against: the raw upload
+      // route itself (writeUploadedBytes → storage.writeObject) has no such field to compare, it
+      // only rejects outright-dangerous content. A pdf/image fileType whose actual bytes don't
+      // match is rejected here instead of being stored under a misleading type.
+      throw new BadRequestException({
+        code: 'FILE_CONTENT_MISMATCH',
+        message: `Uploaded file does not look like a ${dto.fileType}`,
       });
     }
 

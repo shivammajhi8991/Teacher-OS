@@ -213,7 +213,7 @@ class _StatusChipButton extends StatelessWidget {
     final color = tone.color(context);
     return ActionChip(
       label: Text(label, style: TextStyle(color: color)),
-      backgroundColor: color.withOpacity(0.1),
+      backgroundColor: color.withValues(alpha: 0.1),
       side: BorderSide(color: color),
       onPressed: onTap,
     );

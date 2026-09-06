@@ -190,7 +190,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       error: (_, __) => const Text('Could not load students.'),
       data: (result) => result.fold(
         (failure) => Text(failure.message),
+        // `value:` is flagged deprecated by this Flutter SDK in favor of `initialValue:` — left
+        // as-is deliberately: `initialValue` only seeds the field once rather than staying in
+        // sync with `_studentId` on every rebuild (a real behavioral difference, not just a
+        // rename), and this screen has no way to visually confirm the dropdown still reflects
+        // state correctly after switching, in an environment with no Flutter SDK to run the app
+        // until this same Phase 6 CI pass. Safe to leave — `value` still works, just deprecated,
+        // not removed.
         (students) => DropdownButtonFormField<String>(
+          // ignore: deprecated_member_use
           value: _studentId,
           decoration: const InputDecoration(labelText: 'Student'),
           items: [

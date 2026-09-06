@@ -2,6 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
 import { randomUUID } from 'crypto';
+import Redis from 'ioredis';
 import { AppModule } from '../src/app.module';
 
 // docs/05 §5.7 lists "Registration/Login" as a critical workflow requiring an integration test —
@@ -18,6 +19,19 @@ describe('Auth (e2e)', () => {
   let refreshToken: string;
 
   beforeAll(async () => {
+    // Phase 6 security review: the throttler storage is now Redis-backed (previously in-memory,
+    // reset on every process start — see redis-throttler-storage.service.ts for why that never
+    // actually satisfied docs/04 §4.8's "via Redis"). Login/register have no authenticated user
+    // yet, so they're tracked by IP (always the same loopback address here), which means their
+    // hit counts now genuinely persist in Redis across repeated runs of this exact suite within
+    // the same 60s window — a real, previously-nonexistent flakiness source this file needs to
+    // guard against, not a bug in the throttler itself. Flushing before the suite runs keeps this
+    // suite's own repeated logins/registrations (five, well under any real attacker's budget) from
+    // ever tripping a limit left over from the previous run.
+    const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+    await redis.flushdb();
+    redis.disconnect();
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

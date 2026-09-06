@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teacheros/core/sync/sync_engine.dart';
 import 'package:teacheros/core/utils/result.dart';
 import 'package:teacheros/features/attendance/domain/entities/attendance_roster.dart';
+import 'package:teacheros/features/attendance/domain/entities/student_attendance_history.dart';
 import 'package:teacheros/features/attendance/domain/repositories/attendance_repository.dart';
 import 'package:teacheros/features/attendance/presentation/providers/attendance_providers.dart';
 import 'package:teacheros/features/attendance/presentation/screens/quick_attendance_screen.dart';
@@ -52,6 +53,15 @@ class _FakeAttendanceRepository implements AttendanceRepository {
         students: const [],
       ),
     );
+  }
+
+  // Added to AttendanceRepository by Phase 5 step 3 (Parent dashboard) — this Phase 4 step 5
+  // fixture predates that and was never updated, invisible until `flutter analyze` actually ran
+  // (Phase 6 CI, this codebase's first real compile-check). QuickAttendanceScreen itself never
+  // calls this, so a fixed dummy is enough to satisfy the interface.
+  @override
+  Future<Result<StudentAttendanceHistory>> getStudentAttendanceHistory(String studentId) async {
+    return Ok(StudentAttendanceHistory(studentId: studentId, percentage: null, records: const []));
   }
 }
 

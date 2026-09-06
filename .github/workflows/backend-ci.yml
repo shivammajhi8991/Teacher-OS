@@ -40,6 +40,19 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Phase 6 security review: the rate limiter is now genuinely Redis-backed
+      # (redis-throttler-storage.service.ts) rather than the throttler library's own in-memory
+      # default — the app won't boot without a reachable Redis any more, so this is no longer
+      # optional infrastructure for this job the way it was before that change.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       NODE_ENV: test

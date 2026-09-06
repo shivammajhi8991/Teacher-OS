@@ -136,6 +136,11 @@ describe('NotesService', () => {
     enrollmentRepo.findOne.mockResolvedValue(null);
     teacherProfilesService.findByUserId.mockResolvedValue(null);
     storage.objectExists.mockResolvedValue(true);
+    // A real PDF signature by default — createDocument's declared-fileType cross-check
+    // (file-signature.util.ts, Phase 6 security review) reads this back for every non-link
+    // document; most fixtures below declare PDF, so this satisfies it without each test needing
+    // its own override.
+    storage.readObject.mockResolvedValue(Buffer.from('%PDF-1.4'));
   });
 
   describe('createDocument', () => {
@@ -167,6 +172,22 @@ describe('NotesService', () => {
           objectKey: 'never-uploaded',
         } as any),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // Phase 6 security review — docs/04 §4.8 "never trust client-declared MIME": the uploaded
+    // bytes are read back and checked against the declared fileType, not just trusted outright.
+    it('rejects a fileType that does not match the uploaded bytes', async () => {
+      storage.readObject.mockResolvedValue(
+        Buffer.from('<html><script>evil()</script></html>'),
+      );
+      await expect(
+        service.createDocument(owner, {
+          title: 'x',
+          fileType: DocumentFileType.PDF,
+          objectKey: 'obj-key',
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(documentRepo.save).not.toHaveBeenCalled();
     });
 
     it('rejects versioning a document you do not own', async () => {

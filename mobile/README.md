@@ -5,9 +5,18 @@ full design rationale and [../docs/08-ux-flows.md](../docs/08-ux-flows.md) for t
 inventory and flows this scaffold implements.
 
 > **This scaffold was authored without a Flutter SDK available in the dev environment it was
-> built in.** Every file was hand-written to the conventions in docs/05, and imports/paths were
-> checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
-> against it yet. Run all three as your first step before building on top of it.
+> built in, all the way through Phase 5.** Every file across Phase 4–5 was hand-written to the
+> conventions in docs/05 and hand-checked for Dart syntax, but `flutter pub get` / `flutter
+> analyze` / `flutter test` were never actually run against any of it until Phase 6 step 1 (CI),
+> which installed a real Flutter SDK for the first time and found 4 real bugs no amount of
+> hand-review could have caught — an `intl` version conflict blocking `pub get` outright, a stale
+> test fixture missing an interface method, and a genuine Flutter `Stepper` behavior bug (its
+> `controlsBuilder` runs once per step, not once for the active step) — see docs/07-roadmap.md's
+> Phase 6 step 1 entry for the full narrative. All fixed; `flutter analyze` now reports no issues
+> and `flutter test` passes in full. `.github/workflows/mobile-ci.yml` runs both on every push/PR
+> touching `mobile/**` from here on, so this gap can't reopen silently. `pubspec.lock` is
+> committed for the first time this step too — standard practice for a Flutter **application**
+> (unlike a package/plugin), and only possible now that a real `pub get` has actually run here.
 
 ## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6 and 8; step 7's CSV import is backend-only, see below)
 

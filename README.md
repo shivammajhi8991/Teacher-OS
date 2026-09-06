@@ -28,12 +28,18 @@ web panel)** adds Users/Institutes/Teacher-categories/Verification-queue admin s
 (backend + a `NavigationRail`-based presentation layer hosted in `mobile/lib/features/admin/`,
 since no Flutter SDK exists in this environment to generate a literal separate Web build target);
 Reported content/System config/Audit log viewer are explicit scope cuts with no backing data model
-anywhere in the codebase, shown as real "coming soon" nav destinations rather than hidden. Verified
-locally (backend: `npm install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass — 233
-tests, plus `npm run test:e2e` 7/7 against real Postgres; mobile: hand-verified import paths, not
-yet run through `flutter analyze`/`flutter test` — no Flutter SDK in the environment this was
-built in, see
-[mobile/README.md](mobile/README.md)).
+anywhere in the codebase, shown as real "coming soon" nav destinations rather than hidden. This
+completed Phase 5. **Phase 6 (Testing & production deployment) is in progress** — step 1 (a
+GitHub Actions CI pipeline for both `backend/` and `mobile/`) and step 2 (a security review pass
+against docs/04 §4.8 + OWASP API/Mobile Top 10) are done; load testing, App Store/Play Store
+submission, and staged rollout have not been started. Setting up mobile CI meant installing a real
+Flutter SDK for the first time in this project's history (previously never available in this dev
+environment — every mobile module across Phase 4–5 was hand-verified for Dart syntax instead), which
+immediately found and fixed 4 real, previously-undiscoverable bugs — see docs/07-roadmap.md's
+Phase 6 step 1 entry. Verified locally: backend `npm install`, `tsc`, `eslint`, `nest build`, and
+`npm test` all pass — 261 tests, plus `npm run test:e2e` 7/7 against real Postgres + Redis; mobile
+`flutter analyze` → no issues, `flutter test` → all passing, both against a real Flutter 3.47.2 SDK
+(see [mobile/README.md](mobile/README.md)).
 
 **Docker became usable partway through step 2**, and `npm run test:e2e` / live manual API
 exercises against real Postgres — both possible in this project for the first time — immediately
@@ -70,7 +76,17 @@ caught a `passwordHash`-leak repeat of the same "never load a related User witho
 column-restricted select" class first caught in step 4, a stale-response bug in the verification
 review endpoint, and a mobile router bug that had silently misrouted every `super_admin` login to
 an institute-scoped dashboard since that role's mobile path had never once been exercised before.
-All are detailed in [docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2 through step 8
+Phase 6 found four more mobile bugs the moment a real Flutter SDK ran against this codebase for
+the first time ever (an `intl` version conflict blocking `pub get` outright, a stale test fixture
+missing an interface method, and a genuine Flutter `Stepper` bug — its `controlsBuilder` runs once
+per step, not once for the active one, so a label comparison against the wrong field would have
+flipped every step's button to "Finish" together) — none reachable by hand-review alone, since
+they're compiler/runtime behaviors, not something readable from source. The security review pass
+found two more real gaps of its own: rate limiting was never actually Redis-backed (an in-memory
+store, the direct cause of this project's own recurring "throttle survives a hot-reload oddly"
+gotcha) and payment endpoints had no throttle at all, and file uploads were never validated by
+their actual content — both fixed and live-verified against real Postgres + Redis. All are
+detailed in [docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2 through Phase 6 step 2
 entries.
 
 Stack decisions locked: Flutter (Riverpod, clean/feature-first architecture) + NestJS + PostgreSQL
@@ -93,12 +109,13 @@ Read in this order:
 
 ```
 TeacherOS/
+├── .github/workflows/      # backend-ci.yml + mobile-ci.yml — Phase 6 step 1, real CI on every push/PR
 ├── docs/                  # design documentation (8 documents, Phase 1–3)
 ├── backend/                # NestJS API — see backend/README.md
 │   ├── src/modules/         # auth ✅ users ✅ institutes ✅ teacher-profiles ✅ students ✅ classes ✅ attendance ✅ fees ✅ notes ✅ notifications ✅ assignments ✅ performance ✅ reports ✅ calendar ✅ announcements ✅ — admin CRUD lives inside users/ and teacher-profiles/, no dedicated module
-│   ├── src/common/          # guards, interceptors, decorators, filters, storage (shared by notes/assignments) — implemented
+│   ├── src/common/          # guards, interceptors, decorators, filters, storage (shared by notes/assignments), throttler (Redis-backed, Phase 6) — implemented
 │   ├── src/database/        # data-source.ts + 16 migrations — implemented, applied end-to-end against real Postgres
-│   └── test/                # auth.e2e-spec.ts — passes against real Postgres (docker-compose up, see backend/README.md)
+│   └── test/                # auth.e2e-spec.ts — passes against real Postgres + Redis (docker-compose up, see backend/README.md)
 ├── mobile/                 # Flutter app — see mobile/README.md
 │   └── lib/
 │       ├── app/             # router, theme, bootstrap — implemented

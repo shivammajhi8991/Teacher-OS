@@ -233,7 +233,7 @@ class _ScheduleSection extends ConsumerWidget {
       trailing: TextButton(onPressed: onSetSchedule, child: const Text('Set / change')),
       child: scheduleAsync.when(
         loading: () => const LoadingView(),
-        error: (error, stackTrace) => Text('Could not load schedule.'),
+        error: (error, stackTrace) => const Text('Could not load schedule.'),
         data: (result) => result.fold(
           (failure) => Text(failure.message),
           (schedule) => schedule == null

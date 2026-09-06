@@ -106,23 +106,41 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         currentStep: _currentStep,
         onStepContinue: _isSubmitting ? null : _handleContinue,
         onStepCancel: _currentStep == 0 ? null : _handleBack,
-        controlsBuilder: (context, details) => Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: Row(
-            children: [
-              FilledButton(
-                onPressed: details.onStepContinue,
-                child: _isSubmitting
-                    ? const InlineSpinner()
-                    : Text(_currentStep == 3 ? 'Finish' : 'Continue'),
-              ),
-              if (details.onStepCancel != null) ...[
-                const SizedBox(width: 8),
-                TextButton(onPressed: details.onStepCancel, child: const Text('Back')),
+        // Phase 6 CI (first real `flutter test` run of this codebase) surfaced a real bug here:
+        // Flutter's vertical Stepper calls this builder once per step, not once for the current
+        // step — every step's `AnimatedCrossFade` keeps BOTH its collapsed and expanded child in
+        // the tree (that's how the cross-fade animates), and Stepper never disables a non-current
+        // step's own `onStepContinue`/`onStepCancel` handlers. Left as originally written, this
+        // silently put 3 extra always-tappable "ghost" Continue/Back buttons in the tree — findable
+        // by a widget test, reachable by a screen reader's focus traversal, invisible to a sighted
+        // user only because their containing AnimatedCrossFade child happens to be collapsed to
+        // zero size. `details.isActive` (`currentStep == stepIndex`) is exactly the flag meant to
+        // guard this — returning an empty widget for every inactive step's builder call means only
+        // the one actually-visible step ever gets a real FilledButton. This also fixes a second,
+        // subtler bug: the label compared `_currentStep` (this widget's shared field, identical
+        // across all 4 calls) against 3, rather than `details.stepIndex` (each call's own step) —
+        // every step's button would have flipped to "Finish" together the moment `_currentStep`
+        // reached 3, not just that step's own.
+        controlsBuilder: (context, details) {
+          if (!details.isActive) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Row(
+              children: [
+                FilledButton(
+                  onPressed: details.onStepContinue,
+                  child: _isSubmitting
+                      ? const InlineSpinner()
+                      : Text(details.stepIndex == 3 ? 'Finish' : 'Continue'),
+                ),
+                if (details.onStepCancel != null) ...[
+                  const SizedBox(width: 8),
+                  TextButton(onPressed: details.onStepCancel, child: const Text('Back')),
+                ],
               ],
-            ],
-          ),
-        ),
+            ),
+          );
+        },
         steps: [
           Step(
             title: const Text('Category'),

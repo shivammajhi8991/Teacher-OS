@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { mkdir, readFile, rm, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { PresignedUpload, StorageAdapter } from './storage.adapter';
+import { isDangerousUpload } from './file-signature.util';
 
 // The only registered StorageAdapter in this pass — see storage.adapter.ts for why. Object keys
 // are ALWAYS server-generated (`randomUUID()`, never derived from a client-supplied file name),
@@ -45,6 +46,16 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
   }
 
   async writeObject(objectKey: string, data: Buffer): Promise<void> {
+    // docs/04 §4.8 (Phase 6 security review) — reject by actual content, never by the client's
+    // declared type (this raw-bytes upload route never even receives one — see notes.controller.ts
+    // / assignments.controller.ts's `uploadBytes`). Checked here, not per-caller, since every
+    // upload through this adapter passes through this one method.
+    if (isDangerousUpload(data)) {
+      throw new BadRequestException({
+        code: 'DANGEROUS_FILE_TYPE',
+        message: 'This file type is not allowed',
+      });
+    }
     await mkdir(this.uploadDir, { recursive: true });
     await writeFile(this.pathFor(objectKey), data);
   }

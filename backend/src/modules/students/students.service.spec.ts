@@ -87,6 +87,44 @@ describe('StudentsService', () => {
       expect(result).toEqual([]);
       expect(studentRepo.find).not.toHaveBeenCalled();
     });
+
+    it("returns a parent's own linked children, discovered via their guardian links", async () => {
+      guardianLinkRepo.find.mockResolvedValue([
+        { student: { id: 'child-1' } },
+        { student: { id: 'child-2' } },
+      ]);
+      studentRepo.find.mockResolvedValue([
+        { id: 'child-1' },
+        { id: 'child-2' },
+      ]);
+
+      const result = await service.findAll(
+        { userId: 'user-parent', activeRole: 'parent', instituteId: null },
+        {},
+      );
+
+      expect(guardianLinkRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { guardian: { user: { id: 'user-parent' } } },
+        }),
+      );
+      expect(studentRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: expect.anything() } }),
+      );
+      expect(result).toHaveLength(2);
+    });
+
+    it('returns an empty list for a parent with no linked children, without ever querying students', async () => {
+      guardianLinkRepo.find.mockResolvedValue([]);
+
+      const result = await service.findAll(
+        { userId: 'user-parent', activeRole: 'parent', instituteId: null },
+        {},
+      );
+
+      expect(result).toEqual([]);
+      expect(studentRepo.find).not.toHaveBeenCalled();
+    });
   });
 
   describe('archive', () => {

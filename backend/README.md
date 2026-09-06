@@ -4,9 +4,12 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–2)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–3)
 
-- `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`
+- `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
+  links a freshly-registered `parent` account to any existing `Guardian` row sharing their
+  email/phone (docs/07 Phase 5 step 3) — never the reverse direction. Previously had zero unit
+  test coverage of any kind (only the e2e suite touched it); `auth.service.spec.ts` is new
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
 - `modules/institutes` — institutes CRUD (soft-delete only)
 - `modules/teacher-profiles` — `teacher_categories` (seeded with the spec's starter list),
@@ -15,7 +18,10 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
 - `modules/students` — student_profiles/guardians/student_guardian_links/
   student_teacher_assignments/student_merge_log/student_invites: manual add (with inline
   guardians), list/detail (role- and assignment-scoped), update, archive, add-guardian, merge
-  (duplicate-record resolution with dedup on reassignment), invite-code generation
+  (duplicate-record resolution with dedup on reassignment), invite-code generation. `findAll`
+  (backing `GET /students`) gained a real `parent` branch in Phase 5 step 3 — previously a
+  parent caller silently fell through to the teacher branch and got an empty list every time,
+  with no way to discover their own linked children's ids at all
 - `modules/classes` — classes/class_schedule_versions/schedule_exceptions/enrollments/
   waitlist_entries: create/list/update, RFC 5545 schedule versioning (`rrule` package),
   exceptions (holiday/cancel/reschedule/makeup/extra), enrollment with capacity + waitlist
@@ -120,6 +126,23 @@ second could sign to the byte-identical string, letting a rotated-out token coll
 replacement and pass reuse detection — fixed by adding a random `jti` to the refresh token's
 payload (not the access token's — it's validated by signature alone, never looked up by hash).
 Both are worth remembering if you add another nullable-string column or touch token issuance.
+
+Two more real bugs surfaced in Phase 5 step 3, this time from manually exercising the live API
+end-to-end (register → onboard → add student → add guardian → register a parent → check they can
+see the child) rather than from `test:e2e` itself: (3) both `AssignmentsService.createAssignment`
+and `PerformanceService.recordPerformance` loaded a `Class` via `classRepo.findOne({ where: { id
+} })` with no `relations` option, then immediately read `cls.teacherProfile.id` —
+`Class.teacherProfile` isn't an eager relation, so both crashed with a 500 the moment a real
+class-targeted request came in. Every other module's equivalent helper (Attendance, Classes,
+Fees, Notes) already requested `relations: { teacherProfile: true, ... }` correctly; only these
+two newer call sites missed it — invisible to their own unit tests, since a mocked repository
+returns whatever a test tells it to regardless of what `relations` a real query asked for (both
+specs now assert the actual `find()` options as a guard against this regressing silently again).
+(4) The more significant one: nothing in this codebase ever actually linked a `Guardian.user`
+column to a real account — see the Students/Auth entries above. Together, these four are the
+concrete case for treating a live Postgres + a manual end-to-end pass as a real verification
+step whenever Docker is available, not just `npm test` — see docs/07-roadmap.md's Phase 5 step 2
+and step 3 entries for the full narrative.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

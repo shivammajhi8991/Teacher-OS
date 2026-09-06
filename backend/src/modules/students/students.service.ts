@@ -178,10 +178,34 @@ export class StudentsService {
       });
     }
 
+    // docs/07 roadmap Phase 5 step 3 "Parent dashboard" — a parent's own linked children
+    // (docs/06 §6.2 "O (linked child)"), the list this app's Child switcher and dashboard both
+    // need to even know which student ids exist for this parent in the first place. Previously
+    // missing entirely: this method fell through to the teacher branch below for a parent
+    // caller (findByUserId correctly returns null for them, but that just meant an empty list —
+    // there was no way for a parent to discover their children's ids at all before this).
+    if (requester.activeRole === 'parent') {
+      const links = await this.guardianLinkRepo.find({
+        where: { guardian: { user: { id: requester.userId } } },
+        relations: { student: true },
+      });
+      const studentIds = links.map((l) => l.student.id);
+      if (studentIds.length === 0) return [];
+
+      const where: FindOptionsWhere<StudentProfile> = { id: In(studentIds) };
+      if (filters.status) where.enrollmentStatus = filters.status;
+      if (filters.q) where.fullName = ILike(`%${filters.q}%`);
+      return this.studentRepo.find({
+        where,
+        select: STUDENT_SELECT,
+        order: { fullName: 'ASC' },
+      });
+    }
+
     // Teacher (default): scoped to their own active assignments only (docs/06 §6.2 "F (own
-    // students)"). A student/parent caller falls through here too — findByUserId returns null
-    // for them (they hold no teacher profile), so this correctly resolves to an empty list
-    // rather than every student in the system.
+    // students)"). A student caller falls through here too — findByUserId returns null for
+    // them (they hold no teacher profile), so this correctly resolves to an empty list rather
+    // than every student in the system.
     const teacherProfile = await this.teacherProfilesService.findByUserId(
       requester.userId,
     );

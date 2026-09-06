@@ -34,4 +34,9 @@ class AttendanceRemoteDataSource {
     );
     return response.data as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> getStudentAttendanceHistory(String studentId) async {
+    final response = await _dio.get('/students/$studentId/attendance');
+    return response.data as Map<String, dynamic>;
+  }
 }

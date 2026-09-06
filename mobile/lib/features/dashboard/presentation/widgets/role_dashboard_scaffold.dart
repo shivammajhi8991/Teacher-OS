@@ -21,6 +21,8 @@ class RoleDashboardScaffold extends ConsumerStatefulWidget {
     required this.summaryTiles,
     this.onLogout,
     this.tabBuilders = const {},
+    this.appBarBottom,
+    this.dashboardExtra,
   });
 
   final String greeting;
@@ -28,6 +30,15 @@ class RoleDashboardScaffold extends ConsumerStatefulWidget {
   final List<({String label, String value, IconData icon})> summaryTiles;
   final VoidCallback? onLogout;
   final Map<int, WidgetBuilder> tabBuilders;
+
+  /// Rendered as the AppBar's `bottom` — e.g. the Parent dashboard's child switcher, needed on
+  /// every tab (Dashboard *and* Fees both scope to "whichever child is selected"), not just tab 0.
+  final PreferredSizeWidget? appBarBottom;
+
+  /// An optional extra section on the Dashboard tab (index 0), rendered after the summary tiles
+  /// and before Recent Activity — e.g. the Parent dashboard's "view full history" links. `null`
+  /// (the default, every other role) renders nothing extra.
+  final Widget? dashboardExtra;
 
   @override
   ConsumerState<RoleDashboardScaffold> createState() => _RoleDashboardScaffoldState();
@@ -52,6 +63,7 @@ class _RoleDashboardScaffoldState extends ConsumerState<RoleDashboardScaffold> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.greeting),
+        bottom: widget.appBarBottom,
         actions: [
           chip.SyncStatusChip(
             status: _mapSyncStatus(syncState.status),
@@ -82,7 +94,7 @@ class _RoleDashboardScaffoldState extends ConsumerState<RoleDashboardScaffold> {
         ],
       ),
       body: _selectedTab == 0
-          ? _DashboardTabContent(summaryTiles: widget.summaryTiles)
+          ? _DashboardTabContent(summaryTiles: widget.summaryTiles, extra: widget.dashboardExtra)
           : (widget.tabBuilders[_selectedTab]?.call(context) ??
               _ComingSoonTab(label: widget.tabs[_selectedTab].label)),
       bottomNavigationBar: NavigationBar(
@@ -98,9 +110,10 @@ class _RoleDashboardScaffoldState extends ConsumerState<RoleDashboardScaffold> {
 }
 
 class _DashboardTabContent extends ConsumerWidget {
-  const _DashboardTabContent({required this.summaryTiles});
+  const _DashboardTabContent({required this.summaryTiles, this.extra});
 
   final List<({String label, String value, IconData icon})> summaryTiles;
+  final Widget? extra;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -138,6 +151,7 @@ class _DashboardTabContent extends ConsumerWidget {
             childAspectRatio: 1.6,
             children: [for (final tile in summaryTiles) _SummaryTile(tile: tile)],
           ),
+          if (extra != null) ...[const SizedBox(height: 16), extra!],
           const SizedBox(height: 16),
           const _RecentActivityCard(),
         ],

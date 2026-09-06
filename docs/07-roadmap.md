@@ -390,9 +390,60 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    `npm run test:e2e` / `auth.e2e-spec.ts` actually ran against real Postgres and passed, 7/7**,
    plus all nine migrations applied cleanly end-to-end for the first time. Mobile hand-verified
    for import/path and API-shape correctness only — still no Flutter SDK in this environment.
-3. **Parent dashboard + parent-specific notification digesting** — docs/08 §8.2's own
-   "Performance | Metric history for the child" item belongs here, not in step 2 above: step 2
-   scoped mobile to the teacher-facing record/view flow only.
+3. **Parent dashboard + parent-specific notification digesting ✅ implemented** —
+   notification digesting needed no parent-specific work: `NotificationsService`'s per-user
+   channel preferences (Phase 4 step 8) are role-agnostic by construction, and Fees/Notes/
+   Assignments already fan out to a student's linked guardians via `notifyStudentParty`/
+   `getNotifiableUserIds` (built when each of those modules first shipped) — a parent has been
+   receiving real-time-or-digested notifications about their child all along, they just had
+   nothing to open in-app until this step's dashboard existed. On mobile, a real **child
+   switcher** (docs/08 §8.1: "if
+   >1 child" — a `ChoiceChip` row rendered as the dashboard's AppBar `bottom`, only ever
+   constructed once there's more than one linked child), **real Dashboard summary tiles**
+   (attendance %, fee status, a performance-records count, each computed live for whichever
+   child is selected — "Upcoming classes" stays static, a documented deferral: no calendar/
+   unified-schedule module yet, Phase 5 step 6), a **read-only Fees tab** (view-only by design,
+   not an oversight — docs/06 §6.2 gives Parent "O" for viewing invoices but "–" for recording a
+   payment; fee collection stays the teacher's/institute's authoritative record), and two new
+   detail screens reachable from the Dashboard tab — **Attendance history** (docs/07 Phase 4
+   step 5's own deferred item, picked up here as its natural first consumer) and **Performance
+   history** (docs/08 §8.2's own separate "Performance | Metric history for the child" item,
+   explicitly deferred out of step 2 above). `RoleDashboardScaffold` gained two small,
+   backward-compatible optional slots to support this — `appBarBottom` (the switcher, visible on
+   every tab since Fees also needs to know the selected child) and `dashboardExtra` (the two
+   detail links) — every other role passes neither and is unaffected.
+
+   **This step surfaced two real, previously-undiscovered gaps**, both now fixed:
+   - `GET /students` (`StudentsService.findAll`) had no branch for a parent caller at all — it
+     silently fell through to the teacher-scoped branch and returned an empty list every time,
+     regardless of how many children were actually linked. There was no way for a parent to even
+     discover their own children's ids, since every other endpoint (Fees, Attendance, Notes,
+     Performance) already had correct guardian-link read access wired in from when each of those
+     modules first shipped — this was the one missing piece blocking all of it in practice. Fixed
+     with a real `parent` branch resolving via `student_guardian_links`, with new unit tests.
+   - More significantly: nothing in this codebase ever actually linked a `Guardian.user`
+     column to a real account. `findOrCreateGuardian` (students.service.ts) always created a
+     guardian record from contact details alone, and — as guardian.entity.ts's own header
+     comment already flagged as a known future item — "a login gets linked later if/when that
+     guardian registers... and their phone/email is matched," but nothing ever performed that
+     match. A parent could register and hold a perfectly valid `parent`-role account with zero
+     way to ever reach any of the guardian-linked data every other module correctly gated on.
+     Fixed in `AuthService.register()`: registering with role `parent` now links every existing
+     `Guardian` row sharing that email/phone (and only in that direction — adding a guardian
+     never searches for a matching user, so a teacher entering a parent's phone number can't
+     silently grant that phone's existing account access to a different family's data than
+     intended). `AuthService` had **zero unit test coverage of any kind** before this pass
+     (only the e2e suite touched it) — `auth.service.spec.ts` is new, covering this linking
+     logic plus baseline register() validation.
+
+   Manually exercised end-to-end against real Postgres to confirm the full loop actually closes:
+   teacher adds a guardian by email → a parent registers with that exact email → the guardian
+   record links automatically → the parent immediately sees the linked child via `GET /students`
+   and can read that child's performance data (200, not 403) — confirmed working live.
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (128 tests, 5 new for AuthService's guardian-linking + baseline register() coverage);
+   `npm run test:e2e` 7/7. Mobile hand-verified for import/path and API-shape correctness only —
+   still no Flutter SDK in this environment.
 4. **Institute/admin module** — branches, teacher invites, institute-wide announcements,
    revenue-split payouts (docs/01 §1.3).
 5. **Reports & analytics** — PDF/CSV export, async export jobs per docs/04 §4.7.

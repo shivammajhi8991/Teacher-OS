@@ -69,6 +69,14 @@ student_profiles
 
 guardians
   id, user_id, full_name, phone, email, relationship
+  -- implemented (Phase 5 step 3): user_id starts null when a teacher adds a guardian by contact
+  -- details alone, and gets linked automatically the moment someone registers a `parent`-role
+  -- account with that same email/phone (AuthService.register) — never the reverse direction, so
+  -- adding a guardian can't retroactively grant an existing account access it wasn't meant to
+  -- have. guardian.entity.ts's own header comment already named this as a future step, but
+  -- nothing implemented it until this pass — every guardian-linked read access built into
+  -- Fees/Attendance/Notes/Performance/Students since Phase 4 had nothing to actually match
+  -- against before this.
 
 student_guardian_links       -- many-to-many: multiple guardians per student, one guardian → many children
   id, student_id, guardian_id, is_primary, consent_data_sharing boolean, consent_recorded_at

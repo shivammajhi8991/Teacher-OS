@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–2)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–3)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -47,9 +47,11 @@ inventory and flows this scaffold implements.
 - `features/attendance` — the Quick Attendance screen (docs/08 §8.3): roster defaults every
   student to Present, tap a chip to cycle Present→Absent→Late→Excused, Save bulk-marks. Reachable
   from a class's detail screen via "Take Attendance." Works offline: a failed Save queues via
-  `core/sync` and optimistically merges the marks into the cached roster immediately. Deferred
-  (documented in docs/07-roadmap.md's Phase 4 step 5 entry): a mobile history/percentage-view
-  screen — the backend endpoint exists and is usable, no screen consumes it yet
+  `core/sync` and optimistically merges the marks into the cached roster immediately.
+  `getStudentAttendanceHistory` (Phase 5 step 3) finally picks up docs/07-roadmap.md's Phase 4
+  step 5 deferred item — a mobile history/percentage-view screen, the backend endpoint existed
+  and was usable well before any screen consumed it; `ChildAttendanceScreen`
+  (`features/parent`) is that first consumer
 - `features/fees` — the Fee Collection flow (docs/08 §8.4), added as a **Fees section on the
   existing Student Detail screen** rather than a separate screen or tab, matching how the spec
   actually describes the flow ("Teacher opens student → sees pending amount → records payment →
@@ -101,7 +103,21 @@ inventory and flows this scaffold implements.
   field for every metric type (server-side validation is the real source of truth for what's
   valid, surfaced back as an inline error). The read-only history list shows what's been
   recorded. A parent/student-facing read view is docs/08 §8.2's own separate "Performance |
-  Metric history for the child" item, left for the Parent-dashboard pass (Phase 5 step 3)
+  Metric history for the child" item, picked up by `features/parent` below
+- `features/parent` — docs/07-roadmap.md's Phase 5 step 3. `linkedChildrenProvider` calls the
+  exact same `GET /students` use case the Teacher dashboard's Students tab already uses — the
+  backend, not the client, decides what "the student list" means for the caller's role, so no
+  parent-specific data-layer code was needed there. A real **child switcher** (docs/08 §8.1: "if
+  >1 child") renders as the dashboard's AppBar `bottom` — `RoleDashboardScaffold` gained that
+  slot plus an optional `dashboardExtra` section for this step, both backward-compatible (every
+  other role passes neither). The Dashboard tab's summary tiles are computed live for whichever
+  child is selected (attendance %, fee status, a performance-records count — "Upcoming classes"
+  stays static, no calendar module yet); two detail screens (`ChildAttendanceScreen`,
+  `ChildPerformanceScreen`) are reachable from a small "view history" card. The Fees tab
+  (`ParentFeesTab`) is read-only by design — docs/06 §6.2 gives Parent no write access to
+  payments, so there's no "Record payment" button here unlike the Teacher-facing Fees section.
+  Announcements and Profile stay "coming soon" (Announcements belongs to the Institute/admin
+  module, Phase 5 step 4; Profile is generic, not part of this step)
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student; the rest

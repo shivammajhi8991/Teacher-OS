@@ -6,9 +6,11 @@ import '../../../../core/sync/offline_cache_store.dart';
 import '../../../../core/sync/pending_action.dart';
 import '../../../../core/utils/result.dart';
 import '../../domain/entities/attendance_roster.dart';
+import '../../domain/entities/student_attendance_history.dart';
 import '../../domain/repositories/attendance_repository.dart';
 import '../datasources/attendance_remote_data_source.dart';
 import '../dto/attendance_roster_dto.dart';
+import '../dto/student_attendance_history_dto.dart';
 
 /// docs/05 §5.4 — the one repository in this codebase with a real offline write path so far.
 /// `bulkMark`'s upsert-by-(session,student) semantics on the backend (attendance-record.entity.ts)
@@ -109,6 +111,16 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
       'students': byId.values.toList(),
       'skippedStudentIds': const <String>[],
     };
+  }
+
+  @override
+  Future<Result<StudentAttendanceHistory>> getStudentAttendanceHistory(String studentId) async {
+    try {
+      final json = await _remoteDataSource.getStudentAttendanceHistory(studentId);
+      return Ok(StudentAttendanceHistoryDto.fromJson(json).toEntity());
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
   }
 
   String _cacheKey(String classId, String occurrenceDate) =>

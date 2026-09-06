@@ -11,19 +11,26 @@ offline-sync engine; Fees with immutable invoices, attendance-based proration, a
 real-but-mocked payment gateway; Notes with link/student/class/institute sharing and a
 real-but-local-disk file storage adapter; and Notifications with per-category channel
 preferences, digest batching, and a real-but-mocked push adapter). **Phase 5 (Advanced features)
-is in progress** — step 1 (Assignments & homework: submission/review/grading, late/resubmission
-handling) and step 2 (Performance tracking: configurable per-category metrics) are implemented
+is in progress** — step 1 (Assignments & homework), step 2 (Performance tracking: configurable
+per-category metrics), and step 3 (Parent dashboard: child switcher, real summary tiles,
+attendance/performance/fees history, all read-only per docs/06's RBAC matrix) are implemented
 end-to-end in both `backend/` and `mobile/`, verified locally (backend: `npm install`, `tsc`,
-`eslint`, `nest build`, and `npm test` all pass — 142 tests; mobile: hand-verified import paths,
+`eslint`, `nest build`, and `npm test` all pass — 128 tests; mobile: hand-verified import paths,
 not yet run through `flutter analyze`/`flutter test` — no Flutter SDK in the environment this was
 built in, see [mobile/README.md](mobile/README.md)).
 
-**Docker became usable partway through step 2**, and `npm run test:e2e` ran against real
-Postgres for the first time in this project — immediately catching and fixing two real bugs (a
-local Postgres port collision now avoided by `infra/docker-compose.yml`'s host-port remap, and a
-refresh-token rotation bug where same-second token issuance could collide and let a
-rotated-out token be reused). See [docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2 entry
-for the full detail.
+**Docker became usable partway through step 2**, and `npm run test:e2e` / live manual API
+exercises against real Postgres — both possible in this project for the first time — immediately
+caught and fixed **four real bugs**: a local Postgres port collision (now avoided by
+`infra/docker-compose.yml`'s host-port remap), a refresh-token rotation bug where same-second
+token issuance could collide and let a rotated-out token be reused, a missing TypeORM relation
+in both Assignments' and Performance's class-ownership checks (worked in every unit test, since
+a mocked repository doesn't care what `relations` a real query asked for; crashed for real), and
+— the most significant — the fact that nothing in this codebase ever actually linked a
+guardian record to a real parent's account, meaning no parent could ever reach any of the
+guardian-linked read access already built into Fees/Attendance/Notes/Performance since Phase 4.
+All four are detailed in [docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2 and step 3
+entries.
 
 Stack decisions locked: Flutter (Riverpod, clean/feature-first architecture) + NestJS + PostgreSQL
 + Redis + FCM, per user selection on 2026-09-04.
@@ -55,11 +62,11 @@ TeacherOS/
 │   └── lib/
 │       ├── app/             # router, theme, bootstrap — implemented
 │       ├── core/            # network, storage, error, theme, widgets, sync — implemented (sync is JSON-file-backed, not Drift — docs/05 §5.4)
-│       └── features/        # auth ✅ onboarding ✅ students ✅ classes ✅ attendance ✅ fees ✅ notes ✅ notifications ✅ assignments ✅ performance ✅ dashboard (shell) ✅ — rest are stub READMEs
+│       └── features/        # auth ✅ onboarding ✅ students ✅ classes ✅ attendance ✅ fees ✅ notes ✅ notifications ✅ assignments ✅ performance ✅ parent ✅ dashboard (shell) ✅ — rest are stub READMEs
 ├── admin-web/               # Admin panel (Flutter Web target, docs/02 §2.8) — not started
 └── infra/                   # docker-compose.yml for local Postgres (host port 5433 — see its own comment) + Redis
 ```
 
 ## Next step
 
-Phase 4 (MVP build) is complete; Phase 5 (Advanced features, see [docs/07-roadmap.md](docs/07-roadmap.md)) is in progress — steps 1–2 (Assignments, Performance tracking) are done, and steps 3–8 (richer Parent dashboards, the Institute/admin module incl. announcements, Reports & analytics, unified Calendar, CSV import, and the Admin web panel) are next. Worth noting a few things the next pass should know about: Fees' offline behavior stayed on Attendance's simpler "always converges" policy rather than building the fuller "financial edits never auto-merge, dedicated conflict-resolution screen" policy docs/05 §5.4 describes — `POST /payments` isn't wired into the mobile offline queue at all yet (a payment while offline currently just fails with a network error rather than queuing). Notes and Assignments are both mobile-scoped to link-only content for the same reason CSV import was scoped out of Students — a real file-upload/download UI needs new pubspec dependencies (`file_picker`, and a way to open a downloaded file) not yet pulled into this pass; the backend supports the full upload/version/download flow for both already, via a storage adapter now shared between the two modules (`backend/src/common/storage/`). Notifications' push delivery is real-but-mocked (no Firebase project exists) and mobile never registers a device token (needs `firebase_messaging` + real platform config); digest batching runs on an in-process cron rather than BullMQ, since nothing in this codebase actually connects to Redis yet. Docker is now usable in this environment (it wasn't for Phase 4 or Phase 5 step 1) — `docker compose -f infra/docker-compose.yml up -d && npm run migration:run` in `backend/` gets a real Postgres up (host port **5433**, not 5432 — see that compose file's comment), and `npm run test:e2e` is worth running after any auth/RBAC change from here on, now that it actually can be.
+Phase 4 (MVP build) is complete; Phase 5 (Advanced features, see [docs/07-roadmap.md](docs/07-roadmap.md)) is in progress — steps 1–3 (Assignments, Performance tracking, Parent dashboard) are done, and steps 4–8 (the Institute/admin module incl. announcements, Reports & analytics, unified Calendar, CSV import, and the Admin web panel) are next. Worth noting a few things the next pass should know about: Fees' offline behavior stayed on Attendance's simpler "always converges" policy rather than building the fuller "financial edits never auto-merge, dedicated conflict-resolution screen" policy docs/05 §5.4 describes — `POST /payments` isn't wired into the mobile offline queue at all yet (a payment while offline currently just fails with a network error rather than queuing). Notes and Assignments are both mobile-scoped to link-only content for the same reason CSV import was scoped out of Students — a real file-upload/download UI needs new pubspec dependencies (`file_picker`, and a way to open a downloaded file) not yet pulled into this pass; the backend supports the full upload/version/download flow for both already, via a storage adapter now shared between the two modules (`backend/src/common/storage/`). Notifications' push delivery is real-but-mocked (no Firebase project exists) and mobile never registers a device token (needs `firebase_messaging` + real platform config); digest batching runs on an in-process cron rather than BullMQ, since nothing in this codebase actually connects to Redis yet. Docker is now usable in this environment (it wasn't for Phase 4 or Phase 5 step 1) — `docker compose -f infra/docker-compose.yml up -d && npm run migration:run` in `backend/` gets a real Postgres up (host port **5433**, not 5432 — see that compose file's comment), and `npm run test:e2e` is worth running after any auth/RBAC change from here on, now that it actually can be — it, and manually exercising the live API, have together caught four real bugs so far (see the Status section above).

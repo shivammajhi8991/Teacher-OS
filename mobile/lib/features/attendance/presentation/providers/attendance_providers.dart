@@ -55,3 +55,7 @@ final rosterProvider = FutureProvider.autoDispose.family<Result<AttendanceRoster
 ) {
   return ref.watch(attendanceRepositoryProvider).getRoster(key.classId, key.date);
 });
+
+final studentAttendanceHistoryProvider = FutureProvider.autoDispose.family((ref, String studentId) {
+  return ref.watch(attendanceRepositoryProvider).getStudentAttendanceHistory(studentId);
+});

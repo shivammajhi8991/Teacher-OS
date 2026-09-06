@@ -12,9 +12,10 @@ import { Institute } from '../../institutes/entities/institute.entity';
 
 // docs/03 §3.4 `guardians`. `user` is nullable — most guardians are added by a teacher with just
 // contact details (docs/01 §1.3: many students are minors managed entirely by a guardian who may
-// never install the app); a login gets linked later if/when that guardian registers with role
-// 'parent' and their phone/email is matched (docs/07 — that matching flow is a follow-up, not
-// built in this pass).
+// never install the app); a login gets linked the moment that guardian registers with role
+// 'parent' and their phone/email matches (AuthService.register, docs/07 Phase 5 step 3) — never
+// the reverse direction, so adding a guardian can't retroactively grant an existing account
+// access to a different family's data than a teacher intended.
 @Entity('guardians')
 export class Guardian {
   @PrimaryGeneratedColumn('uuid')

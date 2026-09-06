@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomUUID } from 'crypto';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { Guardian } from '../students/entities/guardian.entity';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
@@ -41,6 +42,11 @@ export class AuthService {
   constructor(
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepo: Repository<RefreshToken>,
+    // Read-only cross-reference into Students' Guardian entity — see classes.module.ts's
+    // comment for the pattern. Only used to link a freshly-registered parent account to any
+    // guardian record(s) already carrying their email/phone, see register()'s comment.
+    @InjectRepository(Guardian)
+    private readonly guardianRepo: Repository<Guardian>,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService<AppConfig, true>,
@@ -84,6 +90,29 @@ export class AuthService {
       preferredLanguage: dto.preferredLanguage ?? 'en',
     });
     await this.usersService.assignRole(user.id, role.id, null);
+
+    // docs/03 §3.4 guardians.user_id — "a login gets linked later if/when that guardian
+    // registers with role 'parent' and their phone/email is matched" (guardian.entity.ts's own
+    // header comment; this was the missing half of that sentence — a teacher could always add a
+    // guardian by contact details, but nothing ever performed the match on the other side, so a
+    // real parent account could never actually reach any of the guardian-linked read access
+    // already wired into Fees/Attendance/Notes/Performance/Students). Every unlinked Guardian
+    // row sharing this email or phone becomes linked the moment the matching parent registers —
+    // deliberately not the reverse direction (adding a guardian never searches for a matching
+    // user), since a teacher entering a parent's phone number shouldn't silently grant that
+    // phone's existing account access to a different family's data than they intended.
+    if (role.name === 'parent') {
+      const unlinkedGuardians = await this.guardianRepo.find({
+        where: [
+          ...(dto.email ? [{ email: dto.email, user: IsNull() }] : []),
+          ...(dto.phone ? [{ phone: dto.phone, user: IsNull() }] : []),
+        ],
+      });
+      for (const guardian of unlinkedGuardians) {
+        guardian.user = user;
+        await this.guardianRepo.save(guardian);
+      }
+    }
 
     const tokens = await this.issueTokenPair(
       user,

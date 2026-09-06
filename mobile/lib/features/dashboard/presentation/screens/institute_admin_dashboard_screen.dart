@@ -4,6 +4,7 @@ import '../../../announcements/presentation/screens/announcements_list_screen.da
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
 import '../../../institutes/presentation/screens/teacher_roster_screen.dart';
+import '../../../reports/presentation/screens/reports_screen.dart';
 import '../widgets/role_dashboard_scaffold.dart';
 
 /// docs/08 §8.1 Institute Admin shell, §8.2 Institute Admin screen inventory.
@@ -30,6 +31,7 @@ class InstituteAdminDashboardScreen extends ConsumerWidget {
         // institute_admin, but the type is nullable) falls back to the scaffold's own "coming
         // soon" rather than crashing on a null instituteId.
         if (instituteId != null) 1: (context) => TeacherRosterScreen(instituteId: instituteId),
+        3: (context) => const ReportsScreen(), // docs/07 Phase 5 step 5
       },
       dashboardExtra: instituteId == null
           ? null

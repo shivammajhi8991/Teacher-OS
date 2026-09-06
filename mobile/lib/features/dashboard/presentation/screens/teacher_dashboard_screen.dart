@@ -4,6 +4,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../classes/presentation/screens/class_list_screen.dart';
 import '../../../students/presentation/screens/student_list_screen.dart';
 import '../widgets/role_dashboard_scaffold.dart';
+import 'more_menu_screen.dart';
 
 /// docs/08 §8.1 Teacher shell, §8.2 Teacher screen inventory, §8.7 layout regions.
 class TeacherDashboardScreen extends ConsumerWidget {
@@ -24,6 +25,7 @@ class TeacherDashboardScreen extends ConsumerWidget {
       tabBuilders: {
         1: (context) => const ClassListScreen(), // docs/07 Phase 4 step 4
         2: (context) => const StudentListScreen(), // docs/07 Phase 4 step 3
+        4: (context) => const MoreMenuScreen(), // docs/07 Phase 5 step 5
       },
       summaryTiles: const [
         (label: 'Total students', value: '0', icon: Icons.people_outline),

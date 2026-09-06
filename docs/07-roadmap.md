@@ -562,7 +562,68 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    class-targeted announcement and the admin's institute-wide one both correctly surfaced to an
    enrolled student's `GET /announcements`. Mobile hand-verified for import/path and API-shape
    correctness only — still no Flutter SDK in this environment.
-5. **Reports & analytics** — PDF/CSV export, async export jobs per docs/04 §4.7.
+5. **Reports & analytics ✅ implemented** — a new `backend/src/modules/reports`: three
+   synchronous report endpoints (`GET /reports/attendance`, `/reports/fees`,
+   `/reports/students/:id`) plus an async `export_jobs` pair (`POST /export-jobs` → `GET
+   /export-jobs/:id` → `GET /export-jobs/:id/file`) for the two report types genuinely large
+   enough to warrant it (docs/03 §3.11's own note on why the per-student report doesn't get one).
+   Mobile: a shared **Reports** screen (report type, date range, CSV/PDF picker, one "Generate"
+   button) wired into Institute Admin's Reports tab and — the "More" tab's first real use —
+   the Teacher shell's `More → Reports`.
+
+   docs/06 §6.2 "Reports/analytics | F (own scope) | – | – | F (institute scope) | F (platform
+   scope)" — one `report.generate` permission for the three roles that hold it at all; scope
+   (own classes/students, own institute, or any institute/platform-wide) is resolved
+   server-side, never from a client-supplied id except super_admin's optional `instituteId` —
+   see `report-query.dto.ts`'s header comment on why this replaces docs/04's single composite
+   `scope=` param with a well-typed optional field. Every module ReportsService reads from
+   (Attendance, Fees, Performance) is injected by entity directly, never by importing that
+   module's service — this codebase's established "each module duplicates the small helper it
+   needs" convention (`FeesService.getFinancials`'s net/paid-total logic is re-derived here, not
+   imported).
+
+   **PDF generation is real** (`pdfkit`, a new dependency — CSV stays hand-rolled, matching the
+   existing "dependency-light for genuinely simple serialization" preference, e.g. mobile's
+   `Result<T>`): a hand-rolled table layout (fixed column positions, explicit `doc.y` resets per
+   row, a repeated header on each new page) rather than pdfkit's own table helper, since this
+   environment has no way to render and visually verify a PDF — a manual, easy-to-reason-about
+   layout was the safer choice to write correctly without that feedback loop.
+
+   **Two real bugs, both structural rather than logic errors, caught only by actually running
+   the code — a `tsc`/`nest build` pass never executes anything, so neither surfaced there**:
+   - `import PDFDocument from 'pdfkit'` type-checks (`allowSyntheticDefaultImports` is set) but
+     is a genuine runtime bug: that flag only relaxes the type checker, it does not add the
+     `esModuleInterop` helper a default import of a `module.exports = PDFDocument`-style CJS
+     package actually needs — `tsconfig.json` here sets `allowSyntheticDefaultImports` without
+     `esModuleInterop`. Every PDF request would have thrown `TypeError: ... is not a constructor`
+     against the real running server, and did against this module's own new unit tests the
+     moment they exercised the code path — caught there, before it ever reached a live request.
+     Fixed with the interop-safe `import PDFDocument = require('pdfkit')` form.
+   - `ExportJob.objectKey?: string | null` with no explicit `type:` — the exact bug class
+     `AssignmentSubmission.grade` hit in Phase 5 step 2 (TypeORM's reflection-based type
+     inference reports `Object` for a nullable-string union, which Postgres rejects outright).
+     Caught live running this step's own migration (`DataTypeNotSupportedError`), fixed by
+     adding `type: 'varchar'`.
+
+   Manually verified end-to-end against real Postgres: attendance and fees reports generated in
+   both CSV and PDF (PDF bytes confirmed as valid `PDF document` files, not just a 200 status) for
+   a teacher's own class/invoice data; a student report PDF for a student the teacher actually
+   teaches; the async export-job pipeline (202 + PENDING → background-completes to COMPLETED →
+   file downloadable, all within roughly the same request/response cycle in this dev
+   environment) with a second user correctly rejected (403) from reading someone else's job.
+
+   **Deferred, documented**: the async export-job path has no mobile UI this pass — the direct
+   synchronous endpoints already cover this app's real scale, and a polling UI for "large"
+   exports with no realistically large dataset to test it against would be speculative, not
+   real. Institute Admin's separate "Revenue/payouts | Teacher revenue-split summary" screen
+   (reachable from Reports per docs/08 §8.2) is a further scope cut, matching Branches/Payouts'
+   own precedent from step 4 — the backend endpoint (`GET institute-teacher-payouts`) already
+   exists and works, just with no mobile screen consuming it yet.
+
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (183 tests, 13 new); `npm run test:e2e` 7/7; migration applied cleanly against live
+   Postgres. Mobile hand-verified for import/path and API-shape correctness only — still no
+   Flutter SDK in this environment.
 6. **Calendar unification** — conflict detection surfaced in UI (docs/03 §3.5).
 7. **CSV import** for bulk student onboarding.
 8. **Admin web panel** (Flutter Web target, docs/02 §2.8).

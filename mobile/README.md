@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–4)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–5)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -135,10 +135,26 @@ inventory and flows this scaffold implements.
   surface yet — the roster still shows a teacher's configured `payoutPercent`, read-only; setting
   it is a documented scope cut matching Branches' own precedent (real on the backend, no CRUD UI
   this pass)
+- `features/reports` — docs/07-roadmap.md's Phase 5 step 5. One `ReportsScreen` shared by Teacher
+  and Institute Admin (docs/08 §8.2's two "Reports" entries — the backend already resolves "own
+  scope" vs. "institute scope" server-side, so the form is identical either way): report type
+  (Attendance/Fees/Student), a CSV/PDF picker for the first two, date-range pickers, one
+  "Generate" button. No JSON DTO layer here (unlike every other feature) — the backend responds
+  with the file itself, so the repository reads raw bytes off the Dio response directly, and
+  requesting with `ResponseType.bytes` means an *error* response also arrives as bytes rather
+  than the usual JSON envelope — `ReportsRepositoryImpl` decodes that case itself rather than
+  teaching the shared `mapDioExceptionToFailure` about a response type only this feature uses. A
+  generated CSV renders inline as scrollable, selectable text (no need to save/open anything for
+  it); a PDF is saved to the app's own documents directory via `path_provider` (already a
+  dependency, added earlier for Drift) and the screen reports where — no PDF viewer/opener
+  dependency exists yet, the same "no new pubspec dependency" reasoning behind Notes' link-only
+  scope. The async `export-jobs` path (docs/04 §4.7) has no mobile UI this pass — a documented
+  scope cut; the direct endpoints already cover this app's real scale
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student, Teachers
-  for Institute Admin since step 4; the rest still show "coming soon")
+  and Reports for Institute Admin; the Teacher shell's "More" tab got its first real entry this
+  step too — a small `MoreMenuScreen` with one item, Reports; the rest still show "coming soon")
 - `l10n/` — English + Hindi ARB files covering everything built so far (docs/05 §5.6)
 
 Every other `features/*` folder is a stub `README.md` pointing at its roadmap step and doc

@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–4)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–5)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
   links a freshly-registered `parent` account to any existing `Guardian` row sharing their
@@ -103,6 +103,22 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   nowhere for that to point). Deliberately does not call `NotificationsService.notify()`
   per-recipient on creation — a real fan-out belongs on an async job, not a synchronous loop in
   the request path for what can be a large audience
+- `modules/reports` — a new module (Phase 5 step 5): three synchronous reports (`GET
+  /reports/attendance`, `/reports/fees`, `/reports/students/:id`, CSV/PDF for the first two, PDF
+  only for the third) plus an `export_jobs` async pair (`POST /export-jobs` → `GET
+  /export-jobs/:id` → `.../file`) for the two report types large enough to warrant one. One
+  `report.generate` permission covers everything here (docs/06 §6.2 has no separate verbs, just
+  F/–) — scope (own classes/students, own institute, or any institute/platform-wide) is resolved
+  server-side, never client-supplied except super_admin's optional `instituteId`. PDF rendering
+  is real (`pdfkit`, this project's first new backend dependency since the initial scaffold — a
+  hand-rolled table layout rather than pdfkit's own table helper, since this environment can't
+  visually verify a PDF render); CSV stays hand-rolled (`utils/csv.util.ts`), matching the
+  existing "dependency-light for genuinely simple serialization" preference. Every entity this
+  reads (Attendance, Fees, Performance) is injected directly rather than importing those
+  modules' services, re-deriving `FeesService.getFinancials`'s net/paid-total logic locally —
+  this codebase's established convention. The async job path has no BullMQ/Redis behind it (same
+  gap as Notifications' digest batching) — the job row is created and returned immediately, and
+  the real work runs via a fire-and-forget call in this same process right after
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging, and
   `storage/` — `StorageAdapter`/`LocalDiskStorageAdapter` (no S3/GCS account exists for this
@@ -111,7 +127,7 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   server-generated (`randomUUID()`), never derived from client input, so it's path-traversal-safe
   by construction; each module keeps its own upload-bytes controller route and `main.ts`
   raw-body registration under its own resource path
-- Eleven migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Twelve migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
@@ -123,8 +139,9 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   (`branches.deleted_at`, `teacher_profiles.payout_percent`, `teacher_institute_invites`,
   `announcements`, `institute_teacher_payouts` tables, plus `branch.manage`/
   `teacher_invite.manage`/`teacher_invite.redeem`/`announcement.manage`/`announcement.read`/
-  `payout.manage`/`payout.read` grants) — see docs/06 §6.2. All eleven have now run end-to-end
-  against a real Postgres instance (see "Local setup" below).
+  `payout.manage`/`payout.read` grants), and reports (`export_jobs` table, `report.generate`
+  grant) — see docs/06 §6.2. All twelve have now run end-to-end against a real Postgres instance
+  (see "Local setup" below).
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted
@@ -187,6 +204,19 @@ every manual cash/UPI/bank-transfer payment has always failed against a real dat
 test could catch it (a mocked repo accepts an incomplete object); only a real insert against a
 real column constraint could. See docs/07-roadmap.md's Phase 5 step 4 entry for the full
 narrative and the live end-to-end payout verification this all came from.
+
+Phase 5 step 5 (Reports) added two more of a related but distinct kind — structural bugs
+invisible to `tsc`/`nest build`/type-checking generally, since neither ever executes the code
+under test: (8) `import PDFDocument from 'pdfkit'` type-checks fine (`tsconfig.json` sets
+`allowSyntheticDefaultImports`) but throws `TypeError: ... is not a constructor` at runtime — that
+flag only relaxes the type checker; it doesn't add the `esModuleInterop` helper a default import
+of a CJS `module.exports = PDFDocument`-style package actually needs. Caught by this module's own
+new unit tests the moment they exercised the code path, before it ever reached a live PDF
+request; fixed with the interop-safe `import PDFDocument = require('pdfkit')` form. (9)
+`ExportJob.objectKey?: string | null` had no explicit `type:` — the exact bug class
+`AssignmentSubmission.grade` hit in step 2 (TypeORM's reflection-based inference reports `Object`
+for a nullable-string union, which Postgres rejects at `migration:run`). Caught live running this
+step's own migration; fixed with `type: 'varchar'`.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

@@ -13,13 +13,15 @@ real-but-local-disk file storage adapter; and Notifications with per-category ch
 preferences, digest batching, and a real-but-mocked push adapter). **Phase 5 (Advanced features)
 is in progress** — step 1 (Assignments & homework), step 2 (Performance tracking: configurable
 per-category metrics), step 3 (Parent dashboard: child switcher, real summary tiles,
-attendance/performance/fees history, all read-only per docs/06's RBAC matrix), and step 4
+attendance/performance/fees history, all read-only per docs/06's RBAC matrix), step 4
 (Institute/admin module: branches, teacher invites, revenue-split payouts, and a new
-Announcements module) are implemented end-to-end in both `backend/` and `mobile/`, verified
-locally (backend: `npm install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass — 170
-tests, plus `npm run test:e2e` 7/7 against real Postgres; mobile: hand-verified import paths, not
-yet run through `flutter analyze`/`flutter test` — no Flutter SDK in the environment this was
-built in, see [mobile/README.md](mobile/README.md)).
+Announcements module), and step 5 (Reports & analytics: attendance/fees/student reports in
+CSV/PDF, plus an async export-job pair for the two report types large enough to warrant one) are
+implemented end-to-end in both `backend/` and `mobile/`, verified locally (backend: `npm
+install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass — 183 tests, plus `npm run
+test:e2e` 7/7 against real Postgres; mobile: hand-verified import paths, not yet run through
+`flutter analyze`/`flutter test` — no Flutter SDK in the environment this was built in, see
+[mobile/README.md](mobile/README.md)).
 
 **Docker became usable partway through step 2**, and `npm run test:e2e` / live manual API
 exercises against real Postgres — both possible in this project for the first time — immediately
@@ -42,8 +44,12 @@ proactively in step 4 (before ever running the code) in `PayoutsService` and
 `FeesService.confirmGatewayWebhook`, and finally root-caused in step 4's own live testing —
 `TeacherProfilesService.findByUserId()`, shared by roughly 15 call sites across the codebase, had
 never loaded `institute` at all, silently giving every institute-affiliated teacher's newly
-created class `institute: null`. All are detailed in
-[docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2, step 3, and step 4 entries.
+created class `institute: null`. Step 5 (Reports) added two more of a related but distinct kind —
+structural bugs invisible to `tsc`/`nest build` because neither ever executes the code: a pdfkit
+default-import that type-checks but throws at runtime (`allowSyntheticDefaultImports` isn't
+`esModuleInterop`), and another nullable-string column missing an explicit TypeORM `type:`, the
+same class of bug `AssignmentSubmission.grade` hit in step 2. All are detailed in
+[docs/07-roadmap.md](docs/07-roadmap.md)'s Phase 5 step 2 through step 5 entries.
 
 Stack decisions locked: Flutter (Riverpod, clean/feature-first architecture) + NestJS + PostgreSQL
 + Redis + FCM, per user selection on 2026-09-04.
@@ -82,4 +88,4 @@ TeacherOS/
 
 ## Next step
 
-Phase 4 (MVP build) is complete; Phase 5 (Advanced features, see [docs/07-roadmap.md](docs/07-roadmap.md)) is in progress — steps 1–3 (Assignments, Performance tracking, Parent dashboard) are done, and steps 4–8 (the Institute/admin module incl. announcements, Reports & analytics, unified Calendar, CSV import, and the Admin web panel) are next. Worth noting a few things the next pass should know about: Fees' offline behavior stayed on Attendance's simpler "always converges" policy rather than building the fuller "financial edits never auto-merge, dedicated conflict-resolution screen" policy docs/05 §5.4 describes — `POST /payments` isn't wired into the mobile offline queue at all yet (a payment while offline currently just fails with a network error rather than queuing). Notes and Assignments are both mobile-scoped to link-only content for the same reason CSV import was scoped out of Students — a real file-upload/download UI needs new pubspec dependencies (`file_picker`, and a way to open a downloaded file) not yet pulled into this pass; the backend supports the full upload/version/download flow for both already, via a storage adapter now shared between the two modules (`backend/src/common/storage/`). Notifications' push delivery is real-but-mocked (no Firebase project exists) and mobile never registers a device token (needs `firebase_messaging` + real platform config); digest batching runs on an in-process cron rather than BullMQ, since nothing in this codebase actually connects to Redis yet. Docker is now usable in this environment (it wasn't for Phase 4 or Phase 5 step 1) — `docker compose -f infra/docker-compose.yml up -d && npm run migration:run` in `backend/` gets a real Postgres up (host port **5433**, not 5432 — see that compose file's comment), and `npm run test:e2e` is worth running after any auth/RBAC change from here on, now that it actually can be — it, and manually exercising the live API, have together caught four real bugs so far (see the Status section above).
+Phase 4 (MVP build) is complete; Phase 5 (Advanced features, see [docs/07-roadmap.md](docs/07-roadmap.md)) is in progress — steps 1–5 (Assignments, Performance tracking, Parent dashboard, the Institute/admin module incl. announcements, and Reports & analytics) are done, and steps 6–8 (unified Calendar, CSV import, and the Admin web panel) are next. Worth noting a few things the next pass should know about: Fees' offline behavior stayed on Attendance's simpler "always converges" policy rather than building the fuller "financial edits never auto-merge, dedicated conflict-resolution screen" policy docs/05 §5.4 describes — `POST /payments` isn't wired into the mobile offline queue at all yet (a payment while offline currently just fails with a network error rather than queuing). Notes and Assignments are both mobile-scoped to link-only content for the same reason CSV import was scoped out of Students — a real file-upload/download UI needs new pubspec dependencies (`file_picker`, and a way to open a downloaded file) not yet pulled into this pass; the backend supports the full upload/version/download flow for both already, via a storage adapter now shared between the two modules (`backend/src/common/storage/`). Notifications' push delivery is real-but-mocked (no Firebase project exists) and mobile never registers a device token (needs `firebase_messaging` + real platform config); digest batching runs on an in-process cron rather than BullMQ, since nothing in this codebase actually connects to Redis yet — the same reason Reports' async export-job path (step 5) runs its background work as a fire-and-forget call in-process rather than a real queued job. Reports is also this project's first real new backend dependency since the initial scaffold (`pdfkit`, for actual PDF generation) — CSV stays hand-rolled. Docker is now usable in this environment (it wasn't for Phase 4 or Phase 5 step 1) — `docker compose -f infra/docker-compose.yml up -d && npm run migration:run` in `backend/` gets a real Postgres up (host port **5433**, not 5432 — see that compose file's comment), and `npm run test:e2e` is worth running after any auth/RBAC change from here on, now that it actually can be — it, and manually exercising the live API, have together caught four real bugs so far (see the Status section above).

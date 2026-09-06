@@ -324,3 +324,16 @@ audit_logs
 ```
 
 Written by a shared interceptor on every mutating admin/teacher action touching students, fees, or role/permission changes — not per-module bespoke logging — so security review (`docs/` security section) has one place to look.
+
+## 3.11 Report export jobs (docs/04 §4.7, an addition beyond this doc's original scope)
+
+```
+export_jobs
+  id, requested_by, report_type ('attendance'|'fees'), format ('pdf'|'csv'),
+  from_date, to_date, institute_id nullable, status ('pending'|'processing'|'completed'|'failed'),
+  object_key nullable, error_message nullable, created_at, completed_at nullable
+```
+
+Backs docs/04 §4.7's async-export pattern for the two report types large enough to warrant it (`GET /reports/attendance`, `GET /reports/fees`) — the per-student report (`GET /reports/students/:id`) is inherently bounded to one record, so it has no job counterpart and stays a plain synchronous GET. `institute_id` is a plain column, not a foreign key with referential integrity — it's a snapshot of the request parameter the job was created with (meaningful only for super_admin drilling into one institute), not a relationship. The generated file is written through the same `common/storage/` `StorageAdapter` Notes/Assignments already share (`object_key` into the same `uploads/` object-key namespace), read back via `GET /export-jobs/:id/file` once `status` is `completed`.
+
+**Implementation note**: docs/04 §4.7 frames this as running "on a BullMQ worker" — no BullMQ/Redis is wired up anywhere in this codebase (the same documented gap as Notifications' digest batching, docs/07 Phase 4 step 8). The job row is created and returned immediately, and the actual work runs via a fire-and-forget async call in the same process right after — genuinely non-blocking and pollable/retryable, satisfying the behavioral contract this doc actually cares about, without pretending to a queue infrastructure this MVP doesn't have.

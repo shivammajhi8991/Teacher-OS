@@ -125,7 +125,10 @@ export class AssignmentsService {
 
     let cls: Class | null = null;
     if (dto.classId) {
-      cls = await this.classRepo.findOne({ where: { id: dto.classId } });
+      cls = await this.classRepo.findOne({
+        where: { id: dto.classId },
+        relations: { teacherProfile: true },
+      });
       if (!cls) {
         throw new NotFoundException({
           code: 'CLASS_NOT_FOUND',

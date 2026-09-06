@@ -159,6 +159,23 @@ describe('AssignmentsService', () => {
       expect(assignmentRepo.save).not.toHaveBeenCalled();
     });
 
+    // A mocked classRepo doesn't care what `relations` a real TypeORM call asked for — it always
+    // returns whatever the test told it to. So this ownership check can pass every unit test
+    // here while still crashing for real (Class.teacherProfile isn't `eager`, so a findOne()
+    // without `relations: { teacherProfile: true }` leaves it undefined) — exactly what happened
+    // until a live-Postgres smoke test caught it. Asserting the actual find() options is the
+    // unit-test-level guard against that regressing silently again.
+    it('loads the class with its teacherProfile relation (not eager — required for the ownership check above)', async () => {
+      await service.createAssignment(teacher, {
+        title: 't',
+        dueAt: '2099-01-01',
+        classId: 'class-1',
+      } as any);
+      expect(classRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ relations: { teacherProfile: true } }),
+      );
+    });
+
     it('rejects an attachment that is neither an uploaded object nor a valid URL', async () => {
       storage.objectExists.mockResolvedValue(false);
       await expect(

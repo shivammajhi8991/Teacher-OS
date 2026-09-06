@@ -251,6 +251,32 @@ describe('PerformanceService', () => {
         }),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
+
+    // A mocked classRepo doesn't care what `relations` a real TypeORM call asked for — it always
+    // returns whatever the test told it to. So the ownership check above can pass every unit
+    // test here while still crashing for real (Class.teacherProfile isn't `eager`, so a
+    // findOne() without `relations: { teacherProfile: true }` leaves it undefined) — exactly
+    // what a live-Postgres smoke test caught for this exact call site. Asserting the actual
+    // find() options is the unit-test-level guard against that regressing silently again.
+    it('loads the class with its teacherProfile relation (not eager)', async () => {
+      definitionRepo.findOne.mockResolvedValue({
+        id: 'def-1',
+        metricType: MetricType.TEXT,
+        teacherCategory: null,
+        institute: null,
+        teacherProfile: { id: 'teacher-profile-1' },
+      });
+
+      await service.recordPerformance(teacher, {
+        ...baseDto,
+        value: 'ok',
+        classId: 'class-1',
+      });
+
+      expect(classRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ relations: { teacherProfile: true } }),
+      );
+    });
   });
 
   describe('getStudentPerformance', () => {

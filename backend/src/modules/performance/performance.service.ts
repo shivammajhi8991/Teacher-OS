@@ -273,7 +273,10 @@ export class PerformanceService {
 
     let cls: Class | null = null;
     if (dto.classId) {
-      cls = await this.classRepo.findOne({ where: { id: dto.classId } });
+      cls = await this.classRepo.findOne({
+        where: { id: dto.classId },
+        relations: { teacherProfile: true },
+      });
       if (!cls || cls.teacherProfile.id !== teacherProfile.id) {
         throw new ForbiddenException({
           code: 'NOT_AUTHORIZED_FOR_CLASS',

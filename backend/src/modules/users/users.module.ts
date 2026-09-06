@@ -5,10 +5,13 @@ import { Role } from './entities/role.entity';
 import { Permission } from './entities/permission.entity';
 import { UserRole } from './entities/user-role.entity';
 import { UsersService } from './users.service';
+import { AdminUsersService } from './admin-users.service';
+import { AdminUsersController } from './admin-users.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, Role, Permission, UserRole])],
-  providers: [UsersService],
+  controllers: [AdminUsersController],
+  providers: [UsersService, AdminUsersService],
   exports: [UsersService],
 })
 export class UsersModule {}

@@ -21,6 +21,14 @@ users
 roles                      -- 'teacher' | 'student' | 'parent' | 'institute_admin' | 'super_admin'
 user_roles                 -- (user_id, role_id, institute_id nullable) — a user CAN hold multiple roles
                             -- e.g. an institute owner who also teaches; a parent who is also a tutor
+  -- implemented: uniqueness on (user_id, role_id, institute_id) is NOT a single constraint — the
+  -- original one (Phase 4 step 1) relied on standard SQL's NULL-is-distinct-from-NULL rule for
+  -- unique constraints, so it silently never blocked a duplicate grant with a null institute_id
+  -- (a platform-level role, or an independent teacher/student/parent). Real institute-scoped
+  -- grants were always correctly protected; only the null-institute case was unenforced, invisible
+  -- until something actually tried to grant the same role twice — caught live building the Admin
+  -- Panel's own role-assignment endpoint (docs/07 Phase 5 step 8). Fixed with two partial unique
+  -- indexes instead: one for institute-scoped grants, one specifically for null-institute grants.
 
 permissions                -- fine-grained: 'attendance.mark', 'fee.record_payment', 'student.delete', ...
 role_permissions           -- (role_id, permission_id) — see docs/06 for full matrix
@@ -46,6 +54,16 @@ teacher_institute_invites   -- addition beyond this doc's original sketch (docs/
 verification_requests      -- teacher-submitted qualification/ID docs for admin review
   id, teacher_profile_id, document_urls[], status ('pending'|'approved'|'rejected'),
   reviewed_by, reviewed_at, rejection_reason
+  -- implemented (docs/07 Phase 5 step 8): the review side this table's own header comment
+  -- (verification-request.entity.ts) flagged as shipping "with the admin module" — GET
+  -- /verification-requests (pending queue) + PATCH .../:id (approve/reject with reason),
+  -- super_admin only (docs/06 §6.2). Approval/rejection flips teacher_profiles.verification_status
+  -- (rejection returns to 'unverified', not a distinct terminal state, so the teacher can address
+  -- the reason and resubmit). A real response-shape/leak issue was caught and fixed while
+  -- building the queue listing: loading `relations: { teacherProfile: { user: true } }` with no
+  -- column-restricted `select` would have put the full `User` entity — passwordHash included —
+  -- into this admin-facing response, the same bug class TeacherProfilesService.findById's own
+  -- established `select` pattern exists to prevent.
 ```
 
 ## 3.3 Teacher profile & category system
@@ -70,6 +88,13 @@ teacher_profiles
   -- yet." Null means no institute-collected-fees revenue-split arrangement — an independent
   -- teacher, or an institute that hasn't configured one for that teacher.
 ```
+-- implemented (docs/07 Phase 5 step 8): the admin CRUD promised by "add new categories without
+-- major code changes" is `POST /teacher-categories` / `PATCH /teacher-categories/:id`, gated by a
+-- new `teacher_category.manage` permission (seeded super_admin-only). Create slugifies `name` into
+-- `slug`, resolving collisions with a numeric suffix (`piano`, `piano-2`, ...) rather than
+-- rejecting duplicates. `GET /teacher-categories` (existing, unchanged) still only ever returns
+-- `is_active = true` rows, so a category deactivated via PATCH has no admin "show inactive" list to
+-- reactivate it from — real via direct PATCH, just not reachable through that endpoint today.
 
 `teacher_categories` being data, not an enum baked into code, is the mechanism satisfying the spec's "add new categories without major code changes."
 
@@ -345,6 +370,8 @@ audit_logs
 ```
 
 Written by a shared interceptor on every mutating admin/teacher action touching students, fees, or role/permission changes — not per-module bespoke logging — so security review (`docs/` security section) has one place to look.
+
+**Status: not implemented.** Only the `audit_log.read` permission was ever seeded (Phase 4 step 1, granted to institute_admin + super_admin) — the `audit_logs` table itself and the shared interceptor that would write to it were never built, discovered while scoping the Admin Web Panel's own "Audit log viewer" screen (docs/07 Phase 5 step 8). A real, previously-undocumented gap rather than a silent omission now: docs/08 §8.2's Audit log viewer has nothing to read, and stays a "coming soon" destination in the Admin Panel shell until this ships as its own pass — building a correct cross-cutting interceptor (which mutations count, how `before_state`/`after_state` get diffed, retention/partitioning per §2.10) is real, separate infrastructure work, not something to bolt on as a side effect of a UI step.
 
 ## 3.11 Report export jobs (docs/04 §4.7, an addition beyond this doc's original scope)
 

@@ -1,4 +1,5 @@
 import '../../../../core/utils/result.dart';
+import '../entities/institute.dart';
 import '../entities/teacher_invite.dart';
 import '../entities/teacher_roster_entry.dart';
 
@@ -11,4 +12,7 @@ abstract interface class InstitutesRepository {
   /// docs/08 §8.2 "invite" — generates a redeemable code, handed to the teacher out of band
   /// (no in-app delivery yet, matching StudentInvite's own documented scope cut).
   Future<Result<TeacherInvite>> createTeacherInvite(String instituteId, {int? expiresInDays});
+
+  /// docs/08 §8.2 Admin Web Panel "Institutes | List, drill into any institute's admin view."
+  Future<Result<List<Institute>>> listAll();
 }

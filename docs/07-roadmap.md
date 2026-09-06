@@ -730,7 +730,100 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    messages; the two successful rows confirmed as real students with their guardian correctly
    linked (phone/email intact); a second teacher correctly rejected (403) from reading the first
    teacher's import job; an import request with no file attached correctly rejected (400).
-8. **Admin web panel** (Flutter Web target, docs/02 §2.8).
+8. **Admin web panel ✅ implemented (backend + mobile-hosted presentation layer)** — docs/08
+   §8.2's seven-row Admin Web Panel screen list, scoped honestly against what already had (or now
+   has) real backend support:
+
+   - **Users** (`GET /admin/users`, `PATCH /admin/users/:id`, `POST /admin/users/:id/roles`) — new
+     `AdminUsersService`. Search is server-scoped: `super_admin` searches the whole platform,
+     `institute_admin` only their own institute's users (a correlated `IN (SELECT ... WHERE
+     institute_id = :instituteId)` subquery on `user_roles`) — never a client-supplied institute
+     filter. Status toggle (`active`/`suspended`) and role assignment reuse `UsersService`'s
+     existing `assignRole`; granting `super_admin` itself requires the requester already be
+     `super_admin`.
+   - **Institutes** — no new endpoint; reuses the existing `GET /institutes` (already open to any
+     authenticated user, docs/04 §4.4) for a list + read-only detail dialog. No institute-specific
+     admin *action* is added beyond what Institute Admin's own dashboard (Phase 5 step 4) already
+     covers for that institute's own admin.
+   - **Teacher categories** — new `POST /teacher-categories` / `PATCH /teacher-categories/:id`
+     (`teacher_category.manage`, super_admin only). Create slugifies `name` with numeric-suffix
+     collision handling (`piano`, `piano-2`, ...).
+   - **Verification queue** — new `GET /verification-requests` / `PATCH
+     /verification-requests/:id` (`verification.review`, super_admin only). Approving/rejecting
+     flips the teacher profile's `verificationStatus` in the same call.
+   - **Reported content, System config, Audit log viewer — explicitly scope-cut, not built.** None
+     has any backing data model anywhere in the codebase: no content-flagging mechanism, no
+     system-config table, and `audit_logs` (docs/03 §3.10) was never actually implemented beyond
+     seeding its own `audit_log.read` permission back in Phase 4 step 1 — discovered while scoping
+     this step, now recorded in docs/03 §3.10 itself. These show as real navigation destinations in
+     the panel with an honest "coming soon" rather than being silently omitted.
+
+   **Presentation layer, per docs/02 §2.8** ("a separate Flutter Web target sharing the mobile
+   app's domain/data layer... presentation layer separate"): this environment has never run
+   `flutter create` — no `android/`, `ios/`, or `web/` platform folder exists at all — so there is
+   no Flutter SDK available to generate a literal second build target. What's built instead is that
+   target's future presentation-layer *source*: `lib/features/admin/` (a `NavigationRail`-based
+   shell, `AdminPanelShellScreen`, replacing mobile's bottom `NavigationBar`) wired to the exact
+   same Riverpod providers/repositories/API client every other feature uses — nothing about the
+   data layer is web-specific, only the shell widget is. Today it's simply the route a
+   `super_admin`'s mobile session lands on.
+
+   **Four real bugs found this step, none via unit tests (all mocked-repo-invisible or requiring
+   an actual `super_admin` login path this codebase had never exercised before):**
+
+   1. **`user_roles` NULL-uniqueness gap (the most significant finding).** Assigning the identical
+      role (`student`, `institute_id: null`) to the same user twice both returned `201` — confirmed
+      live via direct SQL showing two duplicate rows. Root cause: standard SQL/Postgres unique
+      constraints treat `NULL` as distinct from `NULL`, so Phase 4 step 1's original
+      `UNIQUE(user_id, role_id, institute_id)` constraint never actually enforced uniqueness for
+      null-institute (independent-teacher / global) role grants — only institute-scoped grants were
+      ever protected. Fixed with a new migration
+      (`1772843200000-UserRolesNullInstituteUniqueness.ts`): de-duplicates existing rows via a
+      `ROW_NUMBER() OVER (PARTITION BY user_id, role_id, institute_id ORDER BY created_at ASC)`
+      window function, drops the old constraint, and replaces it with two partial unique indexes —
+      one `WHERE institute_id IS NOT NULL`, one `WHERE institute_id IS NULL`. Verified live after
+      the fix: the same duplicate-grant request correctly returns `409 ROLE_ALREADY_ASSIGNED`.
+   2. **`VerificationReviewService.listQueue()` would have leaked `passwordHash`.** Loading
+      `relations: { teacherProfile: { user: true } }` with no `select` restriction puts the *whole*
+      `User` entity — including `passwordHash` — into the admin-facing JSON response. Caught in
+      code review (the same bug class this codebase has now caught three times:
+      `TeacherProfilesService.findById`, `StudentsService`'s `STUDENT_SELECT`, and this one) before
+      it was ever tested live. Fixed with an explicit column-restricted `select` and a dedicated
+      `VerificationQueueEntry` response shape instead of returning raw entities.
+   3. **`VerificationReviewService.review()` response staleness.** Live testing showed the HTTP
+      response's `teacherProfile.verificationStatus` still read `"unverified"` immediately after an
+      approval, even though the row in Postgres was correctly `"verified"` — the service updated
+      the DB via `profileRepo.update(...)` but returned the stale in-memory `request.teacherProfile`
+      object. Fixed by also setting `request.teacherProfile.verificationStatus` on the in-memory
+      object before returning it.
+   4. **Mobile router misrouted every `super_admin` to the institute-scoped dashboard.** Found via
+      code review while wiring up the new `/admin-panel` route: `_landingRouteFor` sent both
+      `institute_admin` and `super_admin` to the same `/admin` route
+      (`InstituteAdminDashboardScreen`), a screen that keys its Teachers tab, Announcements quick
+      action, and Reports tab entirely off `AppUser.instituteId` — which a `super_admin` normally
+      has as `null`. No test had ever exercised a `super_admin` mobile login before this step, so
+      the bug had been invisible. Fixed by giving `super_admin` its own landing route,
+      `/admin-panel` → `AdminPanelShellScreen`.
+
+   **Scope cut, documented — not silently skipped**: the Teacher categories screen reuses the
+   existing `GET /teacher-categories` (public list, only ever returns `is_active = true` rows) for
+   display, so a category deactivated from the admin screen has no "show inactive" list to
+   reactivate it from in-app — real via a direct `PATCH .../isActive: true`, just not reachable
+   from this screen's list this pass.
+
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (233 tests, 20 new across `admin-users.service.spec.ts`,
+   `teacher-category-admin.service.spec.ts`, `verification-review.service.spec.ts`); `npm run
+   test:e2e` 7/7; both new migrations applied cleanly against live Postgres. Manually exercised
+   end-to-end against real Postgres: user search (both institute-scoped and platform-wide),
+   suspend/reactivate, role assignment including the duplicate-grant fix (`409` after the fix, `201`
+   twice before it); teacher-category create (slug collision handling) and deactivate; verification
+   queue list and approve (confirming the passwordHash-leak fix's response shape and the
+   staleness fix's corrected `verificationStatus`). The mobile router fix was verified by code
+   review only — no Flutter SDK is available in this environment to run the app and confirm the
+   navigation live, the same honest limitation the presentation-layer note above describes.
+
+   This completes Phase 5.
 
 ## Phase 6 — Testing & production deployment
 

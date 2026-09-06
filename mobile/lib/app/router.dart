@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../features/admin/presentation/screens/admin_panel_shell_screen.dart';
 import '../features/auth/presentation/providers/auth_providers.dart';
 import '../features/auth/presentation/providers/auth_state.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
@@ -55,6 +56,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/admin',
         builder: (context, state) => const InstituteAdminDashboardScreen(),
       ),
+      // docs/07 Phase 5 step 8. Previously super_admin landed on the SAME `/admin` route as
+      // institute_admin (`InstituteAdminDashboardScreen`) — a real, previously-undiscovered bug:
+      // that screen is institute-scoped throughout (its Teachers tab, its Announcements quick
+      // action, its Reports tab all key off `AppUser.instituteId`), which a super_admin normally
+      // has as `null`, so it would have rendered an almost entirely "coming soon" dashboard. Fixed
+      // by giving super_admin its own distinct landing route.
+      GoRoute(
+        path: '/admin-panel',
+        builder: (context, state) => const AdminPanelShellScreen(),
+      ),
     ],
   );
 });
@@ -63,7 +74,8 @@ String _landingRouteFor(String role) => switch (role) {
       'teacher' => '/teacher',
       'student' => '/student',
       'parent' => '/parent',
-      'institute_admin' || 'super_admin' => '/admin',
+      'institute_admin' => '/admin',
+      'super_admin' => '/admin-panel',
       _ => '/login',
     };
 

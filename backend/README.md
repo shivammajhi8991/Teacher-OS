@@ -4,7 +4,7 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–7)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5, complete, all 8 steps)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
   links a freshly-registered `parent` account to any existing `Guardian` row sharing their
@@ -140,6 +140,25 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   over events already fetched to build the calendar, cheaper than the per-class endpoint's own
   fresh queries. One `calendar.read` permission for every role (docs/06 §6.2 has no separate
   verbs here either)
+- `modules/students/student-import.*` — CSV import (Phase 5 step 7): `POST /students/import`
+  (multipart) + `GET /students/import-jobs/:id`, the same fire-and-forget async-job pattern
+  Reports established. Row validation reuses `CreateStudentDto`'s own class-validator decorators;
+  CSV parsing is hand-rolled with full RFC 4180 escaping
+- Admin CRUD (Phase 5 step 8) — no dedicated module; added directly to the modules the resources
+  already belong to. `modules/users/admin-users.*`: `GET /admin/users` (server-scoped search —
+  super_admin sees the platform, institute_admin only their own institute via a correlated
+  subquery on `user_roles`), `PATCH /admin/users/:id` (status), `POST /admin/users/:id/roles`
+  (role grant, reusing `UsersService.assignRole`), all behind the existing `user.administer`
+  permission. `modules/teacher-profiles/teacher-category-admin.*`: `POST`/`PATCH
+  /teacher-categories` (new `teacher_category.manage` permission, super_admin only; create
+  slugifies `name` with numeric-suffix collision handling). `modules/teacher-profiles/
+  verification-review.*`: `GET`/`PATCH /verification-requests` (new `verification.review`
+  permission, super_admin only) — approving/rejecting a request flips the teacher profile's
+  `verificationStatus` in the same call. Reported content, System config, and an Audit log viewer
+  (docs/08 §8.2's other three Admin Web Panel rows) are explicit scope cuts — none has any backing
+  data model anywhere in this codebase; `audit_logs` (docs/03 §3.10) in particular was discovered
+  this step to have never actually been built beyond seeding its own `audit_log.read` permission
+  back in Phase 4 step 1
 - `common/` — global JWT guard (protected-by-default, opt out with `@Public()`), permissions
   guard (`@RequirePermission`), standard error envelope, request-correlated logging, and
   `storage/` — `StorageAdapter`/`LocalDiskStorageAdapter` (no S3/GCS account exists for this
@@ -148,7 +167,7 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   server-generated (`randomUUID()`), never derived from client input, so it's path-traversal-safe
   by construction; each module keeps its own upload-bytes controller route and `main.ts`
   raw-body registration under its own resource path
-- Fourteen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Sixteen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
@@ -162,9 +181,12 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   `teacher_invite.manage`/`teacher_invite.redeem`/`announcement.manage`/`announcement.read`/
   `payout.manage`/`payout.read` grants), reports (`export_jobs` table, `report.generate` grant),
   calendar (no new tables — see calendar.service.ts's header comment — just a `calendar.read`
-  grant), and student-import (`student_import_jobs` table, no new grant — gated by the existing
-  `student.manage`) — see docs/06 §6.2. All fourteen have now run end-to-end against a real
-  Postgres instance (see "Local setup" below).
+  grant), student-import (`student_import_jobs` table, no new grant — gated by the existing
+  `student.manage`), admin-panel (`teacher_category.manage`/`verification.review` grants, both
+  super_admin only — no new tables), and user-roles-null-institute-uniqueness (no new tables —
+  de-dups existing `user_roles` rows and replaces the old single unique constraint with two
+  partial unique indexes; see the bug narrative below) — see docs/06 §6.2. All sixteen have now
+  run end-to-end against a real Postgres instance (see "Local setup" below).
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted
@@ -250,6 +272,32 @@ generic "Invalid row" — a bad `guardianEmail` never said why it failed. Caught
 actual import flow (a unit test with a real `class-validator` `validate()` call would have caught
 it too, but this one was found via a live multipart upload before the corresponding test was
 strengthened); fixed with a small recursive `flattenValidationMessages` helper.
+
+Phase 5 step 8 (Admin web panel) found the most significant bug of the project so far, plus three
+smaller repeats/regressions of earlier bug classes: (11) **`user_roles`' unique constraint never
+actually worked for null-institute grants.** Assigning the identical role (`student`,
+`institute_id: null`) to the same user twice both returned `201` — confirmed live via a direct SQL
+query showing two duplicate rows. Root cause: standard SQL/Postgres unique constraints treat
+`NULL` as distinct from `NULL`, so `UNIQUE(user_id, role_id, institute_id)` (live since Phase 4
+step 1) never blocked a duplicate grant whenever `institute_id` was null — only institute-scoped
+grants were ever actually protected. No unit test could have caught this; it's real database
+semantics, invisible to a mocked repository. Fixed with a migration that de-duplicates existing
+rows (`ROW_NUMBER() OVER (PARTITION BY user_id, role_id, institute_id ORDER BY created_at ASC)`),
+drops the old constraint, and replaces it with two partial unique indexes (`WHERE institute_id IS
+NOT NULL` / `WHERE institute_id IS NULL`); verified live that the same duplicate-grant request now
+correctly returns `409`. (12) `VerificationReviewService.listQueue()` repeated bug #1's own class:
+`relations: { teacherProfile: { user: true } }` with no `select` restriction would have put the
+whole `User` entity — including `passwordHash` — into the admin-facing response. Caught in code
+review before it was ever tested live; fixed with a column-restricted `select` and a dedicated
+response shape. (13) `VerificationReviewService.review()` returned a stale in-memory
+`teacherProfile.verificationStatus` immediately after approving/rejecting, even though the row in
+Postgres was correctly updated — caught live (the API response and the database visibly
+disagreed); fixed by also updating the in-memory object before returning it. (14) The mobile
+router sent both `institute_admin` and `super_admin` to the same institute-scoped dashboard route
+— a screen that keys its Teachers/Announcements/Reports tabs entirely off `AppUser.instituteId`,
+which a `super_admin` normally has as `null`. No test had ever exercised a `super_admin` mobile
+login before this step, so the bug had been invisible; caught in code review while wiring up the
+new admin-panel route, fixed by giving `super_admin` its own landing route.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

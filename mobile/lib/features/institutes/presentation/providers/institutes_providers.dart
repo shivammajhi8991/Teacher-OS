@@ -18,3 +18,8 @@ final institutesRepositoryProvider = Provider<InstitutesRepository>((ref) {
 final teacherRosterProvider = FutureProvider.autoDispose.family((ref, String instituteId) {
   return ref.watch(institutesRepositoryProvider).listTeachers(instituteId);
 });
+
+/// docs/08 §8.2 Admin Web Panel "Institutes | List, drill into any institute's admin view."
+final allInstitutesProvider = FutureProvider.autoDispose((ref) {
+  return ref.watch(institutesRepositoryProvider).listAll();
+});

@@ -1,10 +1,12 @@
 import 'package:dio/dio.dart';
 import '../../../../core/network/api_exception_mapper.dart';
 import '../../../../core/utils/result.dart';
+import '../../domain/entities/institute.dart';
 import '../../domain/entities/teacher_invite.dart';
 import '../../domain/entities/teacher_roster_entry.dart';
 import '../../domain/repositories/institutes_repository.dart';
 import '../datasources/institutes_remote_data_source.dart';
+import '../dto/institute_dto.dart';
 import '../dto/teacher_invite_dto.dart';
 import '../dto/teacher_roster_entry_dto.dart';
 
@@ -31,6 +33,18 @@ class InstitutesRepositoryImpl implements InstitutesRepository {
     try {
       final json = await _remoteDataSource.createTeacherInvite(instituteId, expiresInDays: expiresInDays);
       return Ok(TeacherInviteDto.fromJson(json).toEntity());
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<Institute>>> listAll() async {
+    try {
+      final json = await _remoteDataSource.listAll();
+      final institutes =
+          json.map((item) => InstituteDto.fromJson(item as Map<String, dynamic>).toEntity()).toList();
+      return Ok(institutes);
     } on DioException catch (e) {
       return Err(mapDioExceptionToFailure(e));
     }

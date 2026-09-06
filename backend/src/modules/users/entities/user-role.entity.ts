@@ -1,7 +1,6 @@
 import {
   CreateDateColumn,
   Entity,
-  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -14,8 +13,15 @@ import { Institute } from '../../institutes/entities/institute.entity';
 // (docs/06 §6.1: an institute owner who also teaches holds both institute_admin and teacher).
 // institute_id null = platform-level (super_admin) or an independent teacher/student/parent
 // not tied to any institute.
+//
+// Uniqueness is NOT a single `@Index(['user','role','institute'], {unique:true})` — the original
+// one (Phase 4 step 1) silently never blocked a duplicate null-`institute` grant, since standard
+// SQL treats NULL as distinct from NULL in a unique constraint. Real raw-SQL migrations are
+// authoritative here (`synchronize: false`, project-wide), and the actual schema (see
+// `1772843200000-UserRolesNullInstituteUniqueness.ts`) is two partial unique indexes instead:
+// one for institute-scoped grants, one specifically for null-institute grants — this decorator
+// is deliberately omitted rather than left showing a shape the database doesn't actually enforce.
 @Entity('user_roles')
-@Index(['user', 'role', 'institute'], { unique: true })
 export class UserRole {
   @PrimaryGeneratedColumn('uuid')
   id: string;

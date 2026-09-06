@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6 and 8; step 7's CSV import is backend-only, see below)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -139,7 +139,8 @@ inventory and flows this scaffold implements.
   (generate a code, show it once, no in-app delivery). Payout-config *editing* has no mobile
   surface yet — the roster still shows a teacher's configured `payoutPercent`, read-only; setting
   it is a documented scope cut matching Branches' own precedent (real on the backend, no CRUD UI
-  this pass)
+  this pass). Extended in step 8 with `Institute` entity/DTO + `listAll()` (`GET /institutes`,
+  already open to any authenticated user) for the Admin Panel's Institutes screen below
 - `features/reports` — docs/07-roadmap.md's Phase 5 step 5. One `ReportsScreen` shared by Teacher
   and Institute Admin (docs/08 §8.2's two "Reports" entries — the backend already resolves "own
   scope" vs. "institute scope" server-side, so the form is identical either way): report type
@@ -173,6 +174,22 @@ inventory and flows this scaffold implements.
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student, Teachers
   and Reports for Institute Admin; the Teacher shell's "More" tab got its first real entry this
   step too — a small `MoreMenuScreen` with one item, Reports; the rest still show "coming soon")
+- `features/admin` — docs/07-roadmap.md's Phase 5 step 8. `AdminPanelShellScreen`: a
+  `NavigationRail`-based side-nav shell (docs/02 §2.8's "presentation layer is separate from
+  mobile's" — this is that separate presentation layer, hosted for now at `/admin-panel` since no
+  Flutter SDK exists in this environment to scaffold a literal second Web build target) hosting
+  four real screens — `AdminUsersScreen` (search + suspend/reactivate + role-assign via popup
+  menu), `AdminInstitutesScreen` (list + read-only detail dialog, reusing
+  `features/institutes`'s new `listAll()`), `AdminTeacherCategoriesScreen` (reuses onboarding's
+  own `teacherCategoriesProvider`; create dialog + deactivate — a documented gap: the public list
+  endpoint only returns active categories, so a deactivated one has no way back into this list to
+  reactivate from here), and `AdminVerificationQueueScreen` (card list, approve/reject-with-reason
+  dialog) — plus three more nav destinations (Reported content, System config, Audit log) with an
+  honest "coming soon" `EmptyState`, matching the backend's own documented scope cuts. A real,
+  previously-invisible router bug was found and fixed wiring this up: `super_admin` had always
+  landed on the same institute-scoped `/admin` route as `institute_admin`, a screen keyed entirely
+  off `AppUser.instituteId` (which `super_admin` has as `null`) — no test had ever exercised a
+  `super_admin` mobile login before this step. Fixed with a dedicated `/admin-panel` route
 - `l10n/` — English + Hindi ARB files covering everything built so far (docs/05 §5.6)
 
 Every other `features/*` folder is a stub `README.md` pointing at its roadmap step and doc

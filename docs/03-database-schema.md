@@ -205,10 +205,16 @@ document_access_log          -- "file access tracking where possible" from spec
 assignments
   id, class_id nullable, student_id nullable, teacher_profile_id, title, description,
   attachment_urls[], due_at, allow_late_submission, allow_resubmission
+  -- implemented: exactly one of class_id/student_id is enforced in AssignmentsService (never
+  -- both, never neither). attachment_urls[] holds a mix of this app's own storage object keys
+  -- and external URLs with no per-entry type discriminator — see assignment.entity.ts.
 
 assignment_submissions
   id, assignment_id, student_id, attachment_urls[], submitted_at, is_late,
   attempt_number, status ('submitted'|'reviewed'), grade, feedback, reviewed_by, reviewed_at
+  -- implemented: no unique constraint on (assignment_id, student_id) — a resubmission (when
+  -- allowed) is a new row with attempt_number incremented, never an overwrite of the prior
+  -- attempt, matching this schema's audit-everywhere convention.
 
 announcements
   id, institute_id nullable, teacher_profile_id nullable, target_type ('class'|'institute'|'individual'),

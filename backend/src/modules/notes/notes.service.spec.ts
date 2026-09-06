@@ -19,7 +19,7 @@ import { StudentGuardianLink } from '../students/entities/student-guardian-link.
 import { StudentTeacherAssignment } from '../students/entities/student-teacher-assignment.entity';
 import { TeacherProfilesService } from '../teacher-profiles/teacher-profiles.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { STORAGE_ADAPTER } from './storage/storage.adapter';
+import { STORAGE_ADAPTER } from '../../common/storage/storage.adapter';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 
 // docs/03 §3.8 (notes half) — the access-resolution matrix is the interesting logic here: a

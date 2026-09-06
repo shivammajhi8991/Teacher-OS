@@ -5,6 +5,10 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
+import '../../../assignments/domain/entities/assignment_summary.dart';
+import '../../../assignments/presentation/providers/assignments_providers.dart';
+import '../../../assignments/presentation/screens/assignment_review_screen.dart';
+import '../../../assignments/presentation/widgets/create_assignment_dialog.dart';
 import '../../../attendance/presentation/screens/quick_attendance_screen.dart';
 import '../../../notes/domain/entities/document_summary.dart';
 import '../../../notes/presentation/providers/notes_providers.dart';
@@ -173,6 +177,8 @@ class ClassDetailScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               _NotesSection(classId: classId),
+              const SizedBox(height: 16),
+              _AssignmentsSection(classId: classId),
             ],
           ),
         ),
@@ -423,6 +429,73 @@ class _NoteTile extends StatelessWidget {
                   onPressed: () => _copyLink(context),
                 )
               : null,
+    );
+  }
+}
+
+/// docs/07 roadmap Phase 5 step 1 "Assignments" — a class-scoped list + create action here,
+/// matching the Fees/Notes precedent of a section on an existing detail screen rather than a new
+/// tab. Reviewing submissions opens AssignmentReviewScreen.
+class _AssignmentsSection extends ConsumerWidget {
+  const _AssignmentsSection({required this.classId});
+
+  final String classId;
+
+  Future<void> _addAssignment(BuildContext context, WidgetRef ref) async {
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (_) => CreateAssignmentDialog(classId: classId),
+    );
+    if (created == true) {
+      ref.invalidate(classAssignmentsProvider(classId));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final assignmentsAsync = ref.watch(classAssignmentsProvider(classId));
+
+    return _Section(
+      title: 'Assignments',
+      trailing: TextButton.icon(
+        onPressed: () => _addAssignment(context, ref),
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('New'),
+      ),
+      child: assignmentsAsync.when(
+        loading: () => const LoadingView(),
+        error: (error, stackTrace) => const Text('Could not load assignments.'),
+        data: (result) => result.fold(
+          (failure) => Text(failure.message),
+          (assignments) => assignments.isEmpty
+              ? const EmptyState(message: 'No assignments yet.')
+              : Column(children: [for (final a in assignments) _AssignmentTile(assignment: a)]),
+        ),
+      ),
+    );
+  }
+}
+
+class _AssignmentTile extends StatelessWidget {
+  const _AssignmentTile({required this.assignment});
+
+  final AssignmentSummary assignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        assignment.isPastDue ? Icons.assignment_late_outlined : Icons.assignment_outlined,
+      ),
+      title: Text(assignment.title),
+      subtitle: Text('Due ${assignment.dueAt.toLocal().toString().substring(0, 10)}'),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AssignmentReviewScreen(assignmentId: assignment.id, title: assignment.title),
+        ),
+      ),
     );
   }
 }

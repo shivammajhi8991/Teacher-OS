@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../assignments/presentation/screens/student_assignments_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../widgets/role_dashboard_scaffold.dart';
 
@@ -19,6 +20,9 @@ class StudentDashboardScreen extends ConsumerWidget {
         (icon: Icons.folder_outlined, label: 'Notes'),
         (icon: Icons.person_outline, label: 'Profile'),
       ],
+      tabBuilders: {
+        2: (context) => const StudentAssignmentsScreen(), // docs/07 Phase 5 step 1
+      },
       summaryTiles: const [
         (label: 'Attendance %', value: '—', icon: Icons.fact_check_outlined),
         (label: 'Assignments due', value: '0', icon: Icons.assignment_late_outlined),

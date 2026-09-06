@@ -9,7 +9,7 @@ inventory and flows this scaffold implements.
 > checked by hand, but `flutter pub get` / `flutter analyze` / `flutter test` have **not** been run
 > against it yet. Run all three as your first step before building on top of it.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 step 1)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -81,9 +81,22 @@ inventory and flows this scaffold implements.
   needs `firebase_messaging`/`firebase_core` and real platform config (google-services.json,
   APNs keys) neither addable nor verifiable in this environment, so `POST /device-tokens` exists
   and works, nothing on mobile calls it yet
+- `features/assignments` — docs/07-roadmap.md's Phase 5 step 1. Teacher side: an **Assignments
+  section on the existing Class Detail screen** (matching the Fees/Notes precedent) — "New"
+  creates a class-targeted assignment (title/description/due date/late+resubmission toggles, no
+  attachment picker — documented deviation, same reasoning as Notes' link-only scope), tapping
+  one opens `AssignmentReviewScreen` (per-submission grade/feedback dialog, with a best-effort
+  student-name lookup reusing the Students feature's own list provider). Student side: the
+  Student dashboard's Assignments tab — previously stubbed with no builder, same as every other
+  non-Dashboard tab — is now wired to `StudentAssignmentsScreen`, and tapping an assignment opens
+  `AssignmentSubmitScreen` (shows description/attachments/due date, lets the student submit or
+  resubmit one external link — again link-only rather than a real upload — and shows grade/
+  feedback once reviewed). Individual-student-targeted assignments have no mobile creation UI
+  (class-targeting only); the backend supports both
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
-  docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher; the rest still show "coming soon")
+  docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student; the rest
+  still show "coming soon")
 - `l10n/` — English + Hindi ARB files covering everything built so far (docs/05 §5.6)
 
 Every other `features/*` folder is a stub `README.md` pointing at its roadmap step and doc

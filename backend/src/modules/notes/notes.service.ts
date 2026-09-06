@@ -32,7 +32,10 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { CreateDocumentShareDto } from './dto/create-document-share.dto';
-import { STORAGE_ADAPTER, StorageAdapter } from './storage/storage.adapter';
+import {
+  STORAGE_ADAPTER,
+  StorageAdapter,
+} from '../../common/storage/storage.adapter';
 
 export interface DocumentSummary {
   id: string;
@@ -81,7 +84,7 @@ export class NotesService {
   ) {}
 
   async createUploadUrl(): Promise<{ uploadUrl: string; objectKey: string }> {
-    return this.storage.createPresignedUpload();
+    return this.storage.createPresignedUpload('documents');
   }
 
   // docs/02 §2.6 — the local adapter's upload route lands here too (see notes.controller.ts);

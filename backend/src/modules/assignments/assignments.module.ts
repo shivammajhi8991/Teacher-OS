@@ -1,15 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Document } from './entities/document.entity';
-import { DocumentShare } from './entities/document-share.entity';
-import { DocumentAccessLog } from './entities/document-access-log.entity';
+import { Assignment } from './entities/assignment.entity';
+import { AssignmentSubmission } from './entities/assignment-submission.entity';
 import { Class } from '../classes/entities/class.entity';
 import { Enrollment } from '../classes/entities/enrollment.entity';
 import { StudentProfile } from '../students/entities/student-profile.entity';
 import { StudentGuardianLink } from '../students/entities/student-guardian-link.entity';
-import { StudentTeacherAssignment } from '../students/entities/student-teacher-assignment.entity';
-import { NotesService } from './notes.service';
-import { NotesController } from './notes.controller';
+import { AssignmentsService } from './assignments.service';
+import { AssignmentsController } from './assignments.controller';
 import { TeacherProfilesModule } from '../teacher-profiles/teacher-profiles.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StorageModule } from '../../common/storage/storage.module';
@@ -17,23 +15,21 @@ import { StorageModule } from '../../common/storage/storage.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Document,
-      DocumentShare,
-      DocumentAccessLog,
+      Assignment,
+      AssignmentSubmission,
       // Read-only cross-references — see classes.module.ts's comment for the pattern.
       Class,
       Enrollment,
       StudentProfile,
       StudentGuardianLink,
-      StudentTeacherAssignment,
     ]),
     TeacherProfilesModule,
     NotificationsModule,
-    // Shared with Assignments — see common/storage/storage.adapter.ts's header comment.
+    // Shared with Notes — see common/storage/storage.adapter.ts's header comment.
     StorageModule,
   ],
-  controllers: [NotesController],
-  providers: [NotesService],
-  exports: [NotesService],
+  controllers: [AssignmentsController],
+  providers: [AssignmentsService],
+  exports: [AssignmentsService],
 })
-export class NotesModule {}
+export class AssignmentsModule {}

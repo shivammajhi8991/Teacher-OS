@@ -4,17 +4,18 @@ A production-oriented "Teacher Operating System": a cross-platform Flutter app (
 
 ## Status
 
-**Phase 1–3 (docs below) complete. Phase 4 (MVP build) is now complete** — all 8 steps (Auth;
+**Phase 1–3 (docs below) complete. Phase 4 (MVP build) is complete** — all 8 steps (Auth;
 Teacher onboarding & profile; Student Management; Classes/Batches with RFC 5545 scheduling and
 non-blocking conflict detection; Attendance with the Quick Attendance flagship flow and the
 offline-sync engine; Fees with immutable invoices, attendance-based proration, and a
 real-but-mocked payment gateway; Notes with link/student/class/institute sharing and a
 real-but-local-disk file storage adapter; and Notifications with per-category channel
-preferences, digest batching, and a real-but-mocked push adapter) are implemented end-to-end in
-both `backend/` and `mobile/`, verified locally (backend: `npm install`, `tsc`, `eslint`,
-`nest build`, and `npm test` all pass — 80 tests; mobile: hand-verified import paths, not yet run
-through `flutter analyze`/`flutter test` — no Flutter SDK in the environment this was built in,
-see [mobile/README.md](mobile/README.md)).
+preferences, digest batching, and a real-but-mocked push adapter). **Phase 5 (Advanced features)
+is in progress** — step 1, Assignments & homework (submission/review/grading, late/resubmission
+handling), is implemented end-to-end in both `backend/` and `mobile/`, verified locally (backend:
+`npm install`, `tsc`, `eslint`, `nest build`, and `npm test` all pass — 96 tests; mobile:
+hand-verified import paths, not yet run through `flutter analyze`/`flutter test` — no Flutter SDK
+in the environment this was built in, see [mobile/README.md](mobile/README.md)).
 
 Stack decisions locked: Flutter (Riverpod, clean/feature-first architecture) + NestJS + PostgreSQL
 + Redis + FCM, per user selection on 2026-09-04.
@@ -38,19 +39,19 @@ Read in this order:
 TeacherOS/
 ├── docs/                  # design documentation (8 documents, Phase 1–3)
 ├── backend/                # NestJS API — see backend/README.md
-│   ├── src/modules/         # auth ✅ users ✅ institutes ✅ teacher-profiles ✅ students ✅ classes ✅ attendance ✅ fees ✅ notes ✅ notifications ✅ — rest are stub READMEs
-│   ├── src/common/          # guards, interceptors, decorators, filters — implemented
-│   ├── src/database/        # data-source.ts + eight migrations — implemented
+│   ├── src/modules/         # auth ✅ users ✅ institutes ✅ teacher-profiles ✅ students ✅ classes ✅ attendance ✅ fees ✅ notes ✅ notifications ✅ assignments ✅ — rest are stub READMEs
+│   ├── src/common/          # guards, interceptors, decorators, filters, storage (shared by notes/assignments) — implemented
+│   ├── src/database/        # data-source.ts + nine migrations — implemented
 │   └── test/                # auth.e2e-spec.ts
 ├── mobile/                 # Flutter app — see mobile/README.md
 │   └── lib/
 │       ├── app/             # router, theme, bootstrap — implemented
 │       ├── core/            # network, storage, error, theme, widgets, sync — implemented (sync is JSON-file-backed, not Drift — docs/05 §5.4)
-│       └── features/        # auth ✅ onboarding ✅ students ✅ classes ✅ attendance ✅ fees ✅ notes ✅ notifications ✅ dashboard (shell) ✅ — rest are stub READMEs
+│       └── features/        # auth ✅ onboarding ✅ students ✅ classes ✅ attendance ✅ fees ✅ notes ✅ notifications ✅ assignments ✅ dashboard (shell) ✅ — rest are stub READMEs
 ├── admin-web/               # Admin panel (Flutter Web target, docs/02 §2.8) — not started
 └── infra/                   # docker-compose.yml for local Postgres + Redis
 ```
 
 ## Next step
 
-Phase 4 (MVP build) is complete. Phase 5 (Advanced features, see [docs/07-roadmap.md](docs/07-roadmap.md)) is next: Assignments, Performance tracking, richer Parent dashboards, the Institute/admin module (including announcements), Reports & analytics, unified Calendar, CSV import, and the Admin web panel. Worth noting a few things the next pass should know about: Fees' offline behavior stayed on Attendance's simpler "always converges" policy rather than building the fuller "financial edits never auto-merge, dedicated conflict-resolution screen" policy docs/05 §5.4 describes — `POST /payments` isn't wired into the mobile offline queue at all yet (a payment while offline currently just fails with a network error rather than queuing). Notes is mobile-scoped to link-only sharing for the same reason CSV import was scoped out of Students — a real file-upload/download UI needs new pubspec dependencies (`file_picker`, and a way to open a downloaded file) not yet pulled into this pass; the backend supports the full upload/version/download flow already. Notifications' push delivery is real-but-mocked (no Firebase project exists) and mobile never registers a device token (needs `firebase_messaging` + real platform config); digest batching runs on an in-process cron rather than BullMQ, since nothing in this codebase actually connects to Redis yet.
+Phase 4 (MVP build) is complete; Phase 5 (Advanced features, see [docs/07-roadmap.md](docs/07-roadmap.md)) is in progress — step 1, Assignments, is done, and steps 2–8 (Performance tracking, richer Parent dashboards, the Institute/admin module incl. announcements, Reports & analytics, unified Calendar, CSV import, and the Admin web panel) are next. Worth noting a few things the next pass should know about: Fees' offline behavior stayed on Attendance's simpler "always converges" policy rather than building the fuller "financial edits never auto-merge, dedicated conflict-resolution screen" policy docs/05 §5.4 describes — `POST /payments` isn't wired into the mobile offline queue at all yet (a payment while offline currently just fails with a network error rather than queuing). Notes and Assignments are both mobile-scoped to link-only content for the same reason CSV import was scoped out of Students — a real file-upload/download UI needs new pubspec dependencies (`file_picker`, and a way to open a downloaded file) not yet pulled into this pass; the backend supports the full upload/version/download flow for both already, via a storage adapter now shared between the two modules (`backend/src/common/storage/`). Notifications' push delivery is real-but-mocked (no Firebase project exists) and mobile never registers a device token (needs `firebase_messaging` + real platform config); digest batching runs on an in-process cron rather than BullMQ, since nothing in this codebase actually connects to Redis yet.

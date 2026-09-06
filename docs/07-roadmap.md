@@ -267,16 +267,71 @@ Phase 4 (MVP build) is now complete.
 
 Each MVP step ships with: backend module + migration, Flutter feature (data/domain/presentation), unit + widget tests, and — for steps 3, 5, 6 — the integration test named in docs/05 §5.7.
 
-## Phase 5 — Advanced features
+## Phase 5 — Advanced features (in progress)
 
-- Assignments & homework (submission/review/grading).
-- Performance/progress tracking (configurable metrics, docs/01 §1.4).
-- Parent dashboard + parent-specific notification digesting.
-- Institute/admin module: branches, teacher invites, institute-wide announcements, revenue-split payouts (docs/01 §1.3).
-- Reports & analytics (PDF/CSV export, async export jobs per docs/04 §4.7).
-- Calendar unification + conflict detection surfaced in UI (docs/03 §3.5).
-- CSV import for bulk student onboarding.
-- Admin web panel (Flutter Web target, docs/02 §2.8).
+1. **Assignments & homework ✅ implemented** — `backend/src/modules/assignments` (assignments,
+   assignment_submissions) and, on mobile, an **Assignments section on the existing Class Detail
+   screen** (teacher: create + review, matching the Fees/Notes precedent of a section on an
+   existing screen rather than a new tab) plus a **real Student Assignments tab** (the Student
+   dashboard already had this tab stubbed with no builder — now wired to
+   `StudentAssignmentsScreen`).
+
+   Per docs/06 §6.2's matrix, only the owning teacher gets write access here —
+   institute_admin/super_admin are marked **R**, not F, unlike most other resources in this
+   codebase (where super_admin is an unconditional escape hatch everywhere else already built).
+   `AssignmentsService` keeps that escape hatch anyway, for consistency with every prior module
+   rather than a one-off exception — documented as a deliberate choice in the service's header
+   comment, not an oversight of the matrix. Parent gets no assignment access at all: docs/08 §8.2
+   Parent screen inventory has no Assignments tab in the first place (Dashboard/Fees/
+   Announcements/Profile only), so the matrix's "–" for Parent matches the designed navigation,
+   not a gap.
+
+   Real, tested edge-case handling per docs/08 §8.5: a late submission is rejected outright when
+   `allowLateSubmission` is false, accepted-and-flagged when true; a resubmission is rejected
+   when `allowResubmission` is false, otherwise becomes a new attempt row (`attemptNumber`
+   incremented, the prior attempt never overwritten — same audit-everywhere convention as the fee
+   credit ledger). A submission requires the caller to actually be a legitimate target: assigned
+   directly, or actively enrolled in the assignment's class as of now.
+
+   **File storage promoted to `common/storage/`** (moved from `modules/notes/storage/`, no
+   behavior change to Notes) — Assignments needed the exact same upload/read/write/delete
+   capability Notes already built, and duplicating that interface+class across two modules would
+   have been the kind of obvious, avoidable duplication this codebase otherwise avoids.
+   `createPresignedUpload` gained one parameter (the calling module's own resource path prefix,
+   e.g. `'documents'` vs `'assignments'`) so each module keeps its own upload-bytes controller
+   route under its own resource path while sharing one `LocalDiskStorageAdapter` instance (one
+   `uploads/` directory, one object-key namespace) — `StorageModule` is a small new module
+   providing `STORAGE_ADAPTER`, imported by both `NotesModule` and `AssignmentsModule`.
+   `attachmentUrls` (on both assignments and submissions) holds a mix of this app's own storage
+   object keys and external URLs with no per-entry type discriminator (unlike `Document`, which
+   has one `fileType` per row) — each entry is validated by trying the storage adapter first,
+   then falling back to "is this a valid http(s) URL."
+
+   New notification integration: `assignment_created` (fan-out to every actively-enrolled
+   student of a class target, or the one direct-student target) and `submission_reviewed`,
+   added as a new `ASSIGNMENT` category in `notifications.constants.ts` — defaults to an
+   immediate push rather than a digest, since both events are genuinely time-sensitive (a
+   deadline, graded feedback) unlike a passive fee/document.
+
+   **Deferred, documented**: mobile scope is intentionally narrow, for the same "no new
+   unverifiable pubspec dependency" reason as Notes' link-only scope — assignment creation has no
+   attachment picker (the backend's real upload flow exists and is usable, just not wired to a
+   file/image picker), individual-student targeting has no mobile UI (class-targeting only), and
+   a submission is one external link rather than an uploaded file. `assignments_repository.dart`
+   and the create/submit screens each document this at their own header comment.
+   Verified locally: backend `npm install` / `tsc` / `eslint` / `nest build` / `npm test` all
+   green (96 tests, 16 new for AssignmentsService — target validation, ownership checks, late/
+   resubmission edge cases, review notification, and the teacher-sees-all-vs-student-sees-own
+   submission scoping). Mobile hand-verified for import/path and API-shape correctness only —
+   still no Flutter SDK in this environment.
+2. **Performance/progress tracking** — configurable metrics, docs/01 §1.4.
+3. **Parent dashboard + parent-specific notification digesting.**
+4. **Institute/admin module** — branches, teacher invites, institute-wide announcements,
+   revenue-split payouts (docs/01 §1.3).
+5. **Reports & analytics** — PDF/CSV export, async export jobs per docs/04 §4.7.
+6. **Calendar unification** — conflict detection surfaced in UI (docs/03 §3.5).
+7. **CSV import** for bulk student onboarding.
+8. **Admin web panel** (Flutter Web target, docs/02 §2.8).
 
 ## Phase 6 — Testing & production deployment
 

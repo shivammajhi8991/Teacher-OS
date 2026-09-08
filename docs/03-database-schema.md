@@ -17,6 +17,17 @@ users
   preferred_language ('en'|'hi'|...), timezone,
   status ('active'|'suspended'|'pending_verification'),
   last_login_at, created_at, updated_at, deleted_at
+  -- implemented (docs/07 Phase 6): POST /auth/account/delete (self-service, password-confirmed)
+  -- soft-deletes this row via deleted_at, revoking every active session first — never a hard
+  -- delete (docs/01 §1.3/§1.5). Deliberately does not cascade to anything the user created
+  -- elsewhere (classes, students, invoices, ...); a deeper anonymization pass is named as a real
+  -- follow-up, not built here. GET /auth/account/export gives a matching self-service export,
+  -- scoped to this table's own identity/access data plus active sessions — not yet a full
+  -- cross-module export of everything the user has ever touched, named as a scope cut rather than
+  -- silently partial. Building this surfaced a real, previously-unreachable bug: uq_users_email/
+  -- uq_users_phone (Phase 4 step 1) never excluded deleted_at, so a soft-deleted user's email/
+  -- phone stayed permanently taken — invisible until this step, since nothing before it ever
+  -- actually soft-deleted a users row. Fixed by adding deleted_at IS NULL to both partial indexes.
 
 roles                      -- 'teacher' | 'student' | 'parent' | 'institute_admin' | 'super_admin'
 user_roles                 -- (user_id, role_id, institute_id nullable) — a user CAN hold multiple roles

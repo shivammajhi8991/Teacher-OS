@@ -22,11 +22,20 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index({ unique: true, where: '"email" IS NOT NULL' })
+  // Phase 6: excludes deleted_at too (see UsersEmailPhoneUniqueExcludesDeleted migration) — a
+  // soft-deleted user's email/phone must free up for a fresh registration, including by the same
+  // real person, not stay permanently "taken."
+  @Index({
+    unique: true,
+    where: '"email" IS NOT NULL AND "deleted_at" IS NULL',
+  })
   @Column({ nullable: true })
   email?: string;
 
-  @Index({ unique: true, where: '"phone" IS NOT NULL' })
+  @Index({
+    unique: true,
+    where: '"phone" IS NOT NULL AND "deleted_at" IS NULL',
+  })
   @Column({ nullable: true })
   phone?: string;
 

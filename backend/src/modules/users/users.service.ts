@@ -34,6 +34,17 @@ export class UsersService {
     await this.userRepo.update(userId, { lastLoginAt: new Date() });
   }
 
+  // docs/01 §1.3/§1.5 — never a hard delete. Sets `deleted_at` via TypeORM's soft-delete, which
+  // both excludes the row from every normal find/findOne going forward and (per the
+  // UsersEmailPhoneUniqueExcludesDeleted migration) frees the email/phone for reuse. Does not
+  // cascade to anything the user created (classes, students, invoices, ...) — those stay, since
+  // other people's records legitimately still reference them; a deeper cascading
+  // anonymization pass is a documented follow-up, not this one (docs/01 §1.3 itself allows
+  // "manual/admin-mediated" execution for this flow).
+  async softDeleteUser(userId: string): Promise<void> {
+    await this.userRepo.softDelete(userId);
+  }
+
   findRoleByName(name: RoleName): Promise<Role | null> {
     return this.roleRepo.findOne({ where: { name } });
   }

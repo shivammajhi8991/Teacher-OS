@@ -50,4 +50,13 @@ class AuthRemoteDataSource {
   Future<void> logout(String deviceId) async {
     await _dio.post('/auth/logout', data: {'deviceId': deviceId});
   }
+
+  Future<Map<String, dynamic>> exportAccountData() async {
+    final response = await _dio.get('/auth/account/export');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> deleteAccount(String password) async {
+    await _dio.post('/auth/account/delete', data: {'password': password});
+  }
 }

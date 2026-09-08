@@ -4,12 +4,18 @@ NestJS modular monolith — see [../docs/02-architecture.md](../docs/02-architec
 full design rationale, [../docs/03-database-schema.md](../docs/03-database-schema.md) for the
 schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API contract.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5, complete, all 8 steps — plus Phase 6 steps 1–2)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5, complete, all 8 steps — plus Phase 6 steps 1–4)
 
 - `modules/auth` — register, login, refresh (rotating), logout, logout-all, `/auth/me`. Also
   links a freshly-registered `parent` account to any existing `Guardian` row sharing their
   email/phone (docs/07 Phase 5 step 3) — never the reverse direction. Previously had zero unit
-  test coverage of any kind (only the e2e suite touched it); `auth.service.spec.ts` is new
+  test coverage of any kind (only the e2e suite touched it); `auth.service.spec.ts` is new.
+  Phase 6 added `GET /auth/account/export` and `POST /auth/account/delete` — docs/01 §1.3's
+  self-service data export/account deletion, a real App Store/Play Store submission requirement
+  that had simply never gotten its own implementation step. Deletion is password-confirmed,
+  revokes every session, then soft-deletes the user (never hard, never cascades to what they
+  created elsewhere); export is scoped to identity/access data only, named as a scope cut short
+  of every business record they've touched
 - `modules/users` — User/Role/Permission/UserRole entities, effective-permission resolution
 - `modules/institutes` — institutes CRUD (soft-delete only; `create` super_admin-only,
   `update`/`archive` resource-scoped to the caller's own institute since Phase 5 step 4 — closing
@@ -177,7 +183,7 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   `@nestjs/throttler`'s default in-memory storage with a real Redis-sorted-set sliding window —
   see docs/04 §4.8's security review subsection for the full rationale and the guard-reordering
   (`app.module.ts`) this needed for per-authenticated-user (not just per-IP) tracking
-- Sixteen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
+- Seventeen migrations: initial schema (users/roles/institutes), teacher-profiles (seeded
   categories), students (guardians/student tables + `student.manage`/`student.read` grants),
   classes (schedule/enrollment tables + `class.manage`/`class.read` grants), attendance
   (`attendance.mark`/`attendance.read` grants), fees (`fee.manage`/`fee.read` grants), notes
@@ -193,10 +199,13 @@ schema, and [../docs/04-api-design.md](../docs/04-api-design.md) for the API con
   calendar (no new tables — see calendar.service.ts's header comment — just a `calendar.read`
   grant), student-import (`student_import_jobs` table, no new grant — gated by the existing
   `student.manage`), admin-panel (`teacher_category.manage`/`verification.review` grants, both
-  super_admin only — no new tables), and user-roles-null-institute-uniqueness (no new tables —
+  super_admin only — no new tables), user-roles-null-institute-uniqueness (no new tables —
   de-dups existing `user_roles` rows and replaces the old single unique constraint with two
-  partial unique indexes; see the bug narrative below) — see docs/06 §6.2. All sixteen have now
-  run end-to-end against a real Postgres instance (see "Local setup" below).
+  partial unique indexes; see the bug narrative below), and
+  users-email-phone-unique-excludes-deleted (no new tables — adds `deleted_at IS NULL` to both
+  `users` partial unique indexes so a soft-deleted account's email/phone actually frees up; see
+  the bug narrative below) — see docs/06 §6.2. All seventeen have now run end-to-end against a
+  real Postgres instance (see "Local setup" below).
 
 Two response-shape/leak issues were caught and fixed during this build, both worth knowing about
 if you extend these modules: (1) never load a related `User` without a column-restricted
@@ -327,6 +336,21 @@ docs/04 §4.8's own "Phase 6 security review" subsection, including a project-wi
 place a related `User` is loaded (this bug class' 3rd, 4th, and — turned out not to be an actual
 leak — a would-be 5th recurrence) and the deliberate scope cuts (HTTPS/HSTS termination, a
 separate upload domain, the pre-existing `npm audit` findings) named rather than silently ignored.
+
+Load testing (Phase 6 step 3, `loadtest/run-load-test.ts`) found a real bottleneck too, though not
+a "bug" in the usual sense: concurrent load on attendance bulk-mark/invoice generation degrades
+~10x, and raising the DB connection pool from 10 to 30 made no measurable difference (nor did
+ruling out the load-test's own HTTP client via an independent-curl-subprocess cross-check) — the
+single Node process's own event loop is the actual bottleneck, exactly confirming docs/02 §2.9's
+existing scale-path note ("horizontal-scale API pods — already trivial"). Full narrative in
+docs/07-roadmap.md's Phase 6 step 3 entry.
+
+Building self-service account deletion (Phase 6 step 4) found (17): `uq_users_email`/
+`uq_users_phone` (Phase 4 step 1) never excluded `deleted_at`, so a soft-deleted user's email/phone
+stayed permanently taken — invisible until this step, since nothing before it ever actually
+soft-deleted a `users` row. Fixed with a migration adding `deleted_at IS NULL` to both partial
+unique indexes; verified live that re-registering with a just-deleted account's exact email now
+succeeds.
 
 Every other module under `src/modules/` is a stub `README.md` pointing at the roadmap step and
 doc sections that define it — see [docs/07-roadmap.md](../docs/07-roadmap.md).

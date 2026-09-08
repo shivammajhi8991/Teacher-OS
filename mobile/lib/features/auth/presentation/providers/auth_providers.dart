@@ -88,6 +88,15 @@ class AuthNotifier extends Notifier<AuthState> {
     state = const AuthUnauthenticated();
   }
 
+  /// docs/01 §1.3 self-service account deletion (Phase 6). Only flips state to signed-out on
+  /// success — a wrong password (or any other failure) must leave the current session intact so
+  /// the caller can show the error and let the user retry, the same reasoning [login] follows.
+  Future<Result<void>> deleteAccount({required String password}) async {
+    final result = await ref.read(authRepositoryProvider).deleteAccount(password: password);
+    result.fold((_) {}, (_) => state = const AuthUnauthenticated());
+    return result;
+  }
+
   /// Called by [ApiClient]'s AuthInterceptor when a 401 survives a refresh attempt — the session
   /// is dead server-side, so drop local state without another round trip.
   void forceLogoutLocally() {

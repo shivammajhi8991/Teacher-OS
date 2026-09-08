@@ -950,9 +950,144 @@ Each MVP step ships with: backend module + migration, Flutter feature (data/doma
    from the previous run, a real, previously-nonexistent flakiness source now guarded against by
    flushing Redis in the suite's own `beforeAll`.
 
-3. **Not yet started**: load testing (attendance-bulk-mark, invoice-generation), App Store / Play
-   Store submission, and staged rollout all remain open — each needs infrastructure or accounts
-   (a load-testing target environment, developer accounts on both stores) this pass didn't set up.
+3. **Load testing ✅ implemented** — `backend/loadtest/run-load-test.ts`, targeting exactly this
+   phase's two named endpoints. Hand-rolled (real `fetch` calls + `Promise.all`, no
+   autocannon/k6) rather than pulling in a framework, since both endpoints need real seeded data
+   (a teacher, classes, enrolled students, a fee structure) created through the actual API before
+   any load can be fired — a load-testing framework wouldn't simplify that setup, matching this
+   project's established dependency-light-when-simple-suffices preference.
+
+   **Two load shapes, both real "term-start/month-start" scenarios**: (A) one class with an
+   unusually large roster (45 students, 5 sequential attendance calls + 3 invoice-generation
+   calls) — the "one big lecture-style class" shape; (B) 25 different teachers each running their
+   own class of 20 students, all firing the same call within the same few seconds — the "every
+   class starts around the same time" shape. Scenario B deliberately uses 25 *separate* teacher
+   accounts rather than one shared one: Phase 6 step 2's now-per-user rate limiting means a single
+   identity issuing hundreds of setup calls would trip its own throttle before the real test ever
+   ran, and 25 different teachers is the more accurate model of the real scenario anyway (a real
+   institute has many teachers, not one teacher scripting hundreds of calls). `POST
+   /auth/register`'s own stricter per-IP throttle (10/60s, correctly IP-scoped since there's no
+   user yet) still caps how fast this script itself can create synthetic teachers — worth knowing
+   if this script is ever pointed at a larger scenario, not a finding about the app itself.
+
+   **The real finding**: latency degrades sharply under concurrency, and the obvious fix doesn't
+   explain it. Scenario A (sequential, one identity) stayed fast throughout — attendance bulk-mark
+   p50 ≈ 50ms, invoice generation p50 ≈ 25ms. Scenario B (25 concurrent identities) jumped to
+   attendance p50 ≈ 650–780ms and invoice generation p50 ≈ 260–300ms, with p50/p95/p99/max all
+   landing within a few ms of each other on every run — a signature of every request queueing
+   behind the same chokepoint rather than each simply taking longer on its own. The obvious
+   suspect, TypeORM's default connection pool (10, unconfigured anywhere in this codebase), turned
+   out **not** to be it: re-running the identical scenario B with the pool explicitly raised to 30
+   produced statistically the same latency (≈656–786ms). A second cross-check ruled out the load
+   test's own HTTP client too — firing the same 25 requests through 25 independent `curl`
+   subprocesses (no shared connection pool at all) took just as long (926ms for the whole batch)
+   as the `fetch`-based run. Both rule-outs point at the same conclusion: the bottleneck is this
+   backend's single Node.js process itself — concurrent requests share one JS thread, so their
+   synchronous per-request work (validation, entity mapping, business logic) serializes regardless
+   of how many DB connections or client connections are available.
+
+   This isn't a new gap to fix — **it's exactly what docs/02 §2.9's scale path already
+   anticipated** ("2. Horizontal-scale API pods (already stateless — trivial)"), and this load
+   test gives that plan concrete, measured teeth: a single Node process visibly cannot absorb a
+   realistic term-start/month-start concurrent-class load, so horizontal replicas (already
+   trivial per docs/02, since this API is stateless) are a real production requirement here, not
+   a theoretical nice-to-have. The DB connection pool is still worth sizing explicitly rather than
+   relying on the implicit default of 10 once multiple replicas are actually running (each
+   replica's own pool competing for Postgres' `max_connections`), just not as the fix for
+   single-process concurrency — that distinction is the reason the pool-size experiment was kept
+   in this writeup instead of quietly reverted as a dead end.
+
+   Verified: full run against real Postgres + Redis, 0 failed requests across every scenario
+   (170 total HTTP calls across setup + measurement). Re-verified backend `tsc`/`eslint`/`nest
+   build`/`npm test` (261/261) and `npm run test:e2e` (7/7) still green after `loadtest/` was
+   added — excluded from the production build (`tsconfig.build.json`) since it's a diagnostic
+   tool, not application code.
+
+4. **Self-service account deletion & data export ✅ implemented** — `POST /auth/account/delete` +
+   `GET /auth/account/export`. Not originally its own Phase 6 line item, but a real, concrete
+   blocker discovered while scoping the App Store/Play Store submission item below: both Apple's
+   App Review Guidelines (5.1.1(v), an in-app account-deletion path) and Google Play's User Data
+   policy require this before a real listing can ever go live, and docs/01 §1.3 had already named
+   it back in Phase 1 ("data export / account deletion request flow... absence of this is a
+   compliance gap, not a nice-to-have") — it simply never got its own implementation step in any
+   phase since. Unlike the store-submission item itself, this needed no external account or
+   credential, so it was built rather than just flagged.
+
+   Deletion requires the caller's current password (re-authentication before a destructive,
+   hard-to-undo action), revokes every active session, then soft-deletes the `users` row via the
+   existing `@DeleteDateColumn` — never a hard delete (docs/01 §1.3/§1.5), and deliberately never
+   cascades to records the user created elsewhere (classes, students, invoices, notes, ...); those
+   stay, since other people's records legitimately still reference them. A full cascading
+   anonymization pass is named as real follow-up work, not built here — docs/01 §1.3 itself allows
+   "manual/admin-mediated" execution for this flow, so this self-service pass covers the account
+   identity itself and leaves cross-module scrubbing for later. The export endpoint is similarly
+   scoped: identity/access data (profile, role/institute memberships, active sessions) only, not
+   yet a full export of every business record the user has ever touched — named as a scope cut,
+   not silently claimed as complete.
+
+   **A real, previously-unreachable bug, found building this**: `uq_users_email`/`uq_users_phone`
+   (Phase 4 step 1) never excluded `deleted_at`, so a soft-deleted user's email/phone stayed
+   permanently "taken" — nobody, including the same real person, could ever register with it
+   again. Invisible until now because nothing before this step ever actually soft-deleted a
+   `users` row (the column existed from day one; no code path exercised it). Fixed with a
+   migration adding `deleted_at IS NULL` to both partial unique indexes.
+
+   Verified locally: `tsc`/`eslint`/`nest build` clean, `npm test` 265/265 (4 new), `npm run
+   test:e2e` 7/7, migration applied cleanly against live Postgres. Live end-to-end against real
+   Postgres: registered a throwaway account, confirmed `GET .../export` returns the expected
+   scoped shape; confirmed `POST .../delete` with the wrong password correctly `401`s without
+   touching anything; confirmed it with the correct password returns `204` and immediately
+   invalidates the account (`/auth/me` with the same still-unexpired access token now `401`s
+   `USER_NOT_FOUND`, since TypeORM's default queries exclude soft-deleted rows); confirmed
+   re-registering with the exact same email now succeeds, proving the index fix.
+
+5. **Not yet started**: App Store / Play Store submission and staged rollout remain genuinely
+   blocked on external accounts and credentials this environment cannot obtain — a Google Play
+   Console account ($25 one-time) and an Apple Developer Program membership ($99/year), both tied
+   to a real identity/organization and a real payment method, plus a signing keystore (Android)
+   and distribution certificate/provisioning profile (iOS). What's been prepared regardless, so
+   the actual submission is a paperwork-and-credentials exercise rather than a standing-start one:
+
+   - **Data-handling map for the privacy nutrition label / Data Safety form** — both forms ask the
+     same underlying question ("what data do you collect, and why") against docs/03's schema:
+     - *Collected*: name, email/phone (`users`), profile photo (`avatar_url`), payment records
+       (`payments`/`invoices` — amount and method, never raw card/UPI details, which this app
+       never touches directly — docs/04 §4.4's gateway-adapter pattern keeps that off this app's
+       own servers entirely), attendance/performance/notes content, device push tokens
+       (`device_push_tokens`), and — the sensitive one — **children's data**: a `student_profiles`
+       row's `dob`, `medical_notes`, `emergency_contact_*` for every minor on the platform,
+       entered by a teacher/guardian on the child's behalf (the child is never the account
+       holder). Both stores' forms have a dedicated "designed for children" / minors-data
+       declaration path — this app is emphatically *not* a children's app itself (accounts belong
+       to teachers/parents/admins, never to a minor directly), but it does process minors' data at
+       a guardian's/institute's direction, which both forms distinguish from "the app targets
+       children" and ask about separately.
+     - *Shared*: nothing with third parties for advertising or analytics — no ad SDK, no
+       analytics SDK of any kind exists in this codebase (`mobile/pubspec.yaml` has none). The
+       only "sharing" is the payment gateway integration itself (docs/04 §4.4), which is
+       real-but-mocked (`MockPaymentGatewayAdapter`) in this codebase — the actual answer here
+       depends entirely on whichever real gateway (Razorpay/Stripe/etc.) is integrated before a
+       real submission, since that choice is what actually receives payment data.
+     - *Security practices to declare*: data encrypted in transit (HTTPS/TLS — real once a
+       production deployment terminates it, see docs/04 §4.8's own named gap), account deletion
+       available in-app (✅, this step), and the standard "you can request data deletion" flow
+       (✅, via the same endpoint).
+   - **Store listing content** — app name, a short/long description, and a privacy policy URL are
+     all text a human needs to write and host; this document set (docs/01's persona/feature
+     rationale, docs/08's screen inventory) is the accurate source material for that copy, but
+     writing marketing copy and standing up a hosted privacy-policy page is explicitly not done
+     here.
+   - **Staged rollout plan** (to execute once a listing exists): Play Console supports a
+     percentage-based staged rollout on a release (start at 5–10% of new installs, hold for 48–72h
+     watching crash-free-rate and ANR rate in the Play Console vitals dashboard, then step to
+     25% → 50% → 100% if those stay flat); TestFlight's equivalent is an external testing group
+     (a curated list of real testers, e.g. a pilot institute's actual teachers) that receives
+     builds ahead of a public App Store release, with Apple's own review gating each external
+     build the same as a public one. Given this app's actual usage pattern — a small number of
+     institutes onboarding at a time, not a mass consumer launch — a real first rollout should
+     skip a broad public percentage entirely in favor of TestFlight/Play's internal-testing track
+     with a single pilot institute first, matching how a B2B-ish tool actually launches in
+     practice, before ever touching a public percentage rollout.
 
 ## Phase 7 — Future-ready (explicitly deferred, architecture already accommodates)
 

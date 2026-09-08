@@ -11,6 +11,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../common/interfaces/request-with-user.interface';
@@ -60,5 +61,21 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.me(user.userId, user.instituteId);
+  }
+
+  // docs/01 §1.3 — self-service data export / account deletion (Phase 6, a real App Store /
+  // Play Store submission requirement, not just a compliance nicety).
+  @Get('account/export')
+  exportAccountData(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.exportAccountData(user.userId, user.instituteId);
+  }
+
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post('account/delete')
+  deleteAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.authService.deleteAccount(user.userId, dto.password);
   }
 }

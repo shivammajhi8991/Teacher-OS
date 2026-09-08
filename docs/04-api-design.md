@@ -30,6 +30,19 @@ POST   /api/v1/auth/password/forgot
 POST   /api/v1/auth/password/reset
 GET    /api/v1/auth/me                     # current user + active roles + permission set
 POST   /api/v1/auth/switch-role            # for users holding multiple roles (e.g. institute owner who also teaches)
+GET    /api/v1/auth/account/export         # implemented (docs/07 Phase 6) — docs/01 §1.3's
+                                            # self-service data export. Scoped to identity/access
+                                            # data (profile, roles, active sessions) only, not yet
+                                            # every business record the user has ever touched
+                                            # elsewhere — a named scope cut, not silently partial.
+POST   /api/v1/auth/account/delete         # implemented (docs/07 Phase 6) — docs/01 §1.3's
+                                            # account-deletion flow, and a real App Store/Play
+                                            # Store submission requirement, not just a compliance
+                                            # nicety. Requires the current password (re-auth
+                                            # before a destructive action), revokes every active
+                                            # session, then soft-deletes the user row — never a
+                                            # hard delete, and never cascades to records the user
+                                            # created elsewhere (classes, students, invoices, ...).
 ```
 
 Rate-limited aggressively (login/OTP: 5/min/IP + 10/hour/account) — auth endpoints are the most-attacked surface.

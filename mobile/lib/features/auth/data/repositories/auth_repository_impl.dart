@@ -76,6 +76,28 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Result<Map<String, dynamic>>> exportAccountData() async {
+    try {
+      return Ok(await _remoteDataSource.exportAccountData());
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<void>> deleteAccount({required String password}) async {
+    try {
+      await _remoteDataSource.deleteAccount(password);
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
+    // Only reached on success — the account (and every session, including this one) is gone
+    // server-side, so there's nothing left to clear tokens for except this device's own copy.
+    await _tokenStorage.clearTokens();
+    return const Ok(null);
+  }
+
+  @override
   Future<AppUser?> restoreSession() async {
     final accessToken = await _tokenStorage.readAccessToken();
     if (accessToken == null) return null;

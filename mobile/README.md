@@ -39,7 +39,15 @@ inventory and flows this scaffold implements.
   restore on cold start, wired to Riverpod (`AuthNotifier`). `AppUser` gained `instituteId`
   (Phase 5 step 4) — `GET /auth/me`'s response always carried each role's own `instituteId`, but
   `MeResponseDto`/`AppUser` only ever kept `activeRole`; the Teachers roster and the
-  institute-wide announcement compose action both need it without a separate round trip
+  institute-wide announcement compose action both need it without a separate round trip.
+  **Scope cut, named rather than silently missing**: Phase 6's `GET /auth/account/export` /
+  `POST /auth/account/delete` are backend-only — no mobile screen calls them yet. This matters
+  more than the usual "backend-only, mobile deferred" pattern elsewhere in this README: Apple's
+  App Review Guideline 5.1.1(v) specifically requires account deletion be reachable *from within
+  the app itself*, not just via a raw API call, so this pair isn't actually submission-ready until
+  a real Settings/Account screen exists to reach them from — a small, well-defined addition (two
+  buttons + a password-confirm dialog against endpoints that already work) rather than a backend
+  gap
 - `features/onboarding` — category grid (loaded from the backend) → progressive profile form
   (Basics / Teaching details / Fees & availability, per docs/08 §8.5) via a `Stepper`; a fresh
   teacher registration is routed here explicitly before landing on the dashboard. Document

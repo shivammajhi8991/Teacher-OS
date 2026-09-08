@@ -240,6 +240,48 @@ export class AuthService {
     };
   }
 
+  // docs/01 §1.3 "data export... flow" — a self-service export of this user's own core account
+  // data. Deliberately scoped to identity/access data only (profile, role/institute memberships,
+  // active sessions) rather than every business record they've ever touched across every module
+  // (their classes, students, invoices, notes, ...) — a genuinely complete cross-module export is
+  // real follow-up work, named here rather than silently claimed. Reuses `me()`'s own shape for
+  // the parts that overlap, plus device/session info `me()` doesn't expose.
+  async exportAccountData(userId: string, instituteId: string | null) {
+    const account = await this.me(userId, instituteId);
+    const activeSessions = await this.refreshTokenRepo.find({
+      where: { user: { id: userId }, revokedAt: IsNull() },
+      select: { deviceId: true, createdAt: true, expiresAt: true },
+    });
+    return {
+      exportedAt: new Date().toISOString(),
+      account: account.user,
+      roles: account.roles,
+      activeSessions,
+      scopeNote:
+        'This export covers your account identity and access data only. It does not yet ' +
+        'include records you created elsewhere in the app (classes, students, invoices, notes, ' +
+        'etc.) — contact support for a full data export of those.',
+    };
+  }
+
+  // docs/01 §1.3 "account deletion request flow." Requires the caller's current password as a
+  // re-authentication step (docs/04 §4.8-adjacent reasoning: a bearer session token alone,
+  // possibly left on an unattended device, isn't confirmation enough for a destructive action).
+  // Revokes every active session first so a concurrent request on another device can't slip in
+  // after the account is gone but before its tokens are rejected, then soft-deletes the user —
+  // see UsersService.softDeleteUser's own comment for what this does and deliberately doesn't do.
+  async deleteAccount(userId: string, password: string): Promise<void> {
+    const user = await this.usersService.findById(userId);
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      throw new UnauthorizedException({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Incorrect password',
+      });
+    }
+    await this.logoutAll(userId);
+    await this.usersService.softDeleteUser(userId);
+  }
+
   private async issueTokenPair(
     user: User,
     role: string,

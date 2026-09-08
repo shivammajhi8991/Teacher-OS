@@ -26,11 +26,14 @@ inventory and flows this scaffold implements.
 > colour/type/spacing token — nothing should ever hard-code a value already there. Landed so far:
 > the theme itself (`app_theme.dart`, `modernist_primitives.dart`'s six shared widgets), the
 > Teacher dashboard, Quick Attendance (redesigned around direct-select `MSegmented` rows instead
-> of the old cycling `ActionChip` — one tap for any status, not up to four), Student detail, and
-> Fee Collection's Record payment + Receipt (the old `RecordPaymentDialog` is now a full screen,
+> of the old cycling `ActionChip` — one tap for any status, not up to four), Student detail, Fee
+> Collection's Record payment + Receipt (the old `RecordPaymentDialog` is now a full screen,
 > `RecordPaymentScreen`, and a successful record pushes a new `ReceiptScreen` confirmation instead
-> of just closing a dialog — docs/08 §8.4's "records payment → receipt" step, finally built).
-> Every other screen still renders in the old placeholder theme's now-overridden `ThemeData`,
+> of just closing a dialog — docs/08 §8.4's "records payment → receipt" step, finally built), and
+> Calendar (the old day-grouped list is now a 7-cell week strip over a single selected day's
+> events, which also fixed a real bug: a midnight `fee_due`/`assignment_due` instant used to
+> render as "00:00 – 00:00"). Every other screen still renders in the old placeholder theme's
+> now-overridden `ThemeData`,
 > which reads as "the same rules and zero radius, but the old layout" until each gets its own
 > redesign pass — a screen-by-screen rollout, not a big-bang rewrite, matching how the handoff
 > itself was scoped.
@@ -197,9 +200,9 @@ inventory and flows this scaffold implements.
 - `features/calendar` — docs/07-roadmap.md's Phase 5 step 6. One shared `CalendarScreen` — docs/08
   §8.2 didn't actually list a Calendar screen for any role before this step, so it was added
   there first (worded identically, "Dashboard quick action," for all four roles). A week at a
-  time (Prev/Next navigation), events grouped by day with an icon per `eventType` and a red
-  "Conflict" chip on any flagged `class_occurrence`; `GET /calendar` scopes to the caller
-  automatically so this sends only a date range, never an owner filter. Wired as a
+  time (Prev/Next navigation): a 7-cell week strip to pick a day, that day's events below it, and
+  an emphasized "CLASH" tag on any flagged `class_occurrence`; `GET /calendar` scopes to the
+  caller automatically so this sends only a date range, never an owner filter. Wired as a
   `CalendarQuickActionCard` on the Teacher/Student dashboards' (previously empty)
   `dashboardExtra` slot, a third `ListTile` in Parent's existing `_DetailLinks` card (the
   parent-role calendar aggregates every linked child, not just whichever one is selected in the

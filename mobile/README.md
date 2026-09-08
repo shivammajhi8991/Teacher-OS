@@ -29,11 +29,14 @@ inventory and flows this scaffold implements.
 > of the old cycling `ActionChip` — one tap for any status, not up to four), Student detail, Fee
 > Collection's Record payment + Receipt (the old `RecordPaymentDialog` is now a full screen,
 > `RecordPaymentScreen`, and a successful record pushes a new `ReceiptScreen` confirmation instead
-> of just closing a dialog — docs/08 §8.4's "records payment → receipt" step, finally built), and
+> of just closing a dialog — docs/08 §8.4's "records payment → receipt" step, finally built),
 > Calendar (the old day-grouped list is now a 7-cell week strip over a single selected day's
 > events, which also fixed a real bug: a midnight `fee_due`/`assignment_due` instant used to
-> render as "00:00 – 00:00"). Every other screen still renders in the old placeholder theme's
-> now-overridden `ThemeData`,
+> render as "00:00 – 00:00"), Login, and Onboarding (Flutter's `Stepper` is gone, replaced by a
+> 4-segment progress rule over 4 custom steps; step 4 used to be a static "coming soon" empty
+> state — there's no fee-structure or availability field anywhere in the profile-creation API for
+> it to collect, so it's now a real Review of everything entered in steps 1–3 instead). Every
+> other screen still renders in the old placeholder theme's now-overridden `ThemeData`,
 > which reads as "the same rules and zero radius, but the old layout" until each gets its own
 > redesign pass — a screen-by-screen rollout, not a big-bang rewrite, matching how the handoff
 > itself was scoped.
@@ -69,10 +72,11 @@ inventory and flows this scaffold implements.
   buttons + a password-confirm dialog against endpoints that already work) rather than a backend
   gap
 - `features/onboarding` — category grid (loaded from the backend) → progressive profile form
-  (Basics / Teaching details / Fees & availability, per docs/08 §8.5) via a `Stepper`; a fresh
-  teacher registration is routed here explicitly before landing on the dashboard. Document
-  upload for verification is still deferred here — the presigned-URL flow it needs now exists
-  on the backend (it shipped with Notes, step 7 below), this screen just doesn't call it yet
+  (Category / Basics / Teaching details / Review, per docs/08 §8.5) as 4 custom steps behind a
+  progress rule (Modernist redesign, below, dropped `Stepper`); a fresh teacher registration is
+  routed here explicitly before landing on the dashboard. Document upload for verification is
+  still deferred here — the presigned-URL flow it needs now exists on the backend (it shipped
+  with Notes, step 7 below), this screen just doesn't call it yet
 - `features/students` — list (status/search filters), add (with an optional inline guardian,
   per spec §3), detail (edit/archive/add-guardian), and an invite-code dialog; wired into the
   Teacher dashboard's Students tab (`RoleDashboardScaffold.tabBuilders`). docs/08 §8.2's

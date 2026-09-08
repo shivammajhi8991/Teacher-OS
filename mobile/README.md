@@ -32,11 +32,17 @@ inventory and flows this scaffold implements.
 > of just closing a dialog — docs/08 §8.4's "records payment → receipt" step, finally built),
 > Calendar (the old day-grouped list is now a 7-cell week strip over a single selected day's
 > events, which also fixed a real bug: a midnight `fee_due`/`assignment_due` instant used to
-> render as "00:00 – 00:00"), Login, and Onboarding (Flutter's `Stepper` is gone, replaced by a
+> render as "00:00 – 00:00"), Login, Onboarding (Flutter's `Stepper` is gone, replaced by a
 > 4-segment progress rule over 4 custom steps; step 4 used to be a static "coming soon" empty
 > state — there's no fee-structure or availability field anywhere in the profile-creation API for
-> it to collect, so it's now a real Review of everything entered in steps 1–3 instead). Every
-> other screen still renders in the old placeholder theme's now-overridden `ThemeData`,
+> it to collect, so it's now a real Review of everything entered in steps 1–3 instead), and Parent
+> home (the child switcher's `ChoiceChip` row is now two flush-left tabs with a 3px accent
+> underline; the fee band keeps its visual weight but its one action is "View fee details," not
+> "Pay ₹2,400" — Parent has read-only fee access by product decision, docs/06 §6.2, not a missing
+> feature; the prototype's "From the teacher" note has no backing data anywhere in this system —
+> `Announcement` is broadcast, not a private per-child note — so it's left out rather than
+> invented). Every other screen still renders in the old placeholder theme's now-overridden
+> `ThemeData`,
 > which reads as "the same rules and zero radius, but the old layout" until each gets its own
 > redesign pass — a screen-by-screen rollout, not a big-bang rewrite, matching how the handoff
 > itself was scoped.
@@ -163,14 +169,17 @@ inventory and flows this scaffold implements.
   parent-specific data-layer code was needed there. A real **child switcher** (docs/08 §8.1: "if
   >1 child") renders as the dashboard's AppBar `bottom` — `RoleDashboardScaffold` gained that
   slot plus an optional `dashboardExtra` section for this step, both backward-compatible (every
-  other role passes neither). The Dashboard tab's summary tiles are computed live for whichever
-  child is selected (attendance %, fee status, a performance-records count — "Upcoming classes"
-  stays static, no calendar module yet); two detail screens (`ChildAttendanceScreen`,
-  `ChildPerformanceScreen`) are reachable from a small "view history" card. The Fees tab
-  (`ParentFeesTab`) is read-only by design — docs/06 §6.2 gives Parent no write access to
-  payments, so there's no "Record payment" button here unlike the Teacher-facing Fees section.
-  Its Announcements tab is now wired too (see `features/announcements` below); Profile stays
-  "coming soon" (generic, not part of any step yet)
+  other role passes neither). The Dashboard tab's stats are computed live for whichever child is
+  selected (attendance %, fee status, a performance-records count) plus, since Calendar shipped
+  (Phase 5 step 6), a real "Next classes" preview — aggregated across every linked child, not just
+  the selected one, since `GET /calendar`'s parent scope can't be filtered to one student; two
+  detail screens (`ChildAttendanceScreen`, `ChildPerformanceScreen`) are reachable from a "more
+  about this child" list. The Fees tab (`ParentFeesTab`) is read-only by design — docs/06 §6.2
+  gives Parent no write access to payments, so there's no "Record payment" button here unlike the
+  Teacher-facing Fees section; the Modernist redesign's fee band (below) keeps that boundary too,
+  its one action pushing the same read-only tab rather than a payment flow. Its Announcements tab
+  is now wired too (see `features/announcements` below); Profile stays "coming soon" (generic,
+  not part of any step yet)
 - `features/announcements` — docs/07-roadmap.md's Phase 5 step 4. One shared
   `AnnouncementsListScreen`, reached differently per role exactly as docs/08 §8.2 specifies for
   each: Parent's own dashboard tab (was "coming soon"), Student's from the Notification center

@@ -8,7 +8,7 @@ import '../../../../core/widgets/modernist_primitives.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart';
 import '../../../fees/domain/entities/invoice_summary.dart';
 import '../../../fees/presentation/providers/fees_providers.dart';
-import '../../../fees/presentation/widgets/record_payment_dialog.dart';
+import '../../../fees/presentation/screens/record_payment_screen.dart';
 import '../../../performance/domain/entities/performance_record.dart';
 import '../../../performance/presentation/providers/performance_providers.dart';
 import '../../../performance/presentation/widgets/record_performance_dialog.dart';
@@ -92,10 +92,22 @@ class StudentDetailScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _openRecordPayment(BuildContext context, WidgetRef ref, InvoiceSummary invoice) async {
-    final recorded = await showDialog<bool>(
-      context: context,
-      builder: (_) => RecordPaymentDialog(invoice: invoice),
+  Future<void> _openRecordPayment(
+    BuildContext context,
+    WidgetRef ref,
+    StudentDetail detail,
+    InvoiceSummary invoice,
+  ) async {
+    final primaryGuardian =
+        detail.guardians.where((g) => g.isPrimary).firstOrNull ?? detail.guardians.firstOrNull;
+    final recorded = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => RecordPaymentScreen(
+          invoice: invoice,
+          studentName: detail.student.fullName,
+          guardianName: primaryGuardian?.fullName,
+        ),
+      ),
     );
     if (recorded == true) ref.invalidate(studentInvoicesProvider(studentId));
   }
@@ -131,7 +143,7 @@ class StudentDetailScreen extends ConsumerWidget {
               onEdit: () => _openEdit(context, ref, detail),
               onArchive: () => _confirmArchive(context, ref),
               onAddGuardian: () => _openAddGuardian(context, ref),
-              onRecordPayment: (invoice) => _openRecordPayment(context, ref, invoice),
+              onRecordPayment: (invoice) => _openRecordPayment(context, ref, detail, invoice),
               onRecordPerformance: () => _openRecordPerformance(context, ref),
             ),
           ),

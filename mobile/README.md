@@ -25,11 +25,15 @@ inventory and flows this scaffold implements.
 > everything set in Archivo. `core/theme/modernist.dart` (`M.*`) is the single source of every
 > colour/type/spacing token — nothing should ever hard-code a value already there. Landed so far:
 > the theme itself (`app_theme.dart`, `modernist_primitives.dart`'s six shared widgets), the
-> Teacher dashboard, and Quick Attendance (redesigned around direct-select `MSegmented` rows
-> instead of the old cycling `ActionChip` — one tap for any status, not up to four). Every other
-> screen still renders in the old placeholder theme's now-overridden `ThemeData`, which reads as
-> "the same rules and zero radius, but the old layout" until each gets its own redesign pass — a
-> screen-by-screen rollout, not a big-bang rewrite, matching how the handoff itself was scoped.
+> Teacher dashboard, Quick Attendance (redesigned around direct-select `MSegmented` rows instead
+> of the old cycling `ActionChip` — one tap for any status, not up to four), Student detail, and
+> Fee Collection's Record payment + Receipt (the old `RecordPaymentDialog` is now a full screen,
+> `RecordPaymentScreen`, and a successful record pushes a new `ReceiptScreen` confirmation instead
+> of just closing a dialog — docs/08 §8.4's "records payment → receipt" step, finally built).
+> Every other screen still renders in the old placeholder theme's now-overridden `ThemeData`,
+> which reads as "the same rules and zero radius, but the old layout" until each gets its own
+> redesign pass — a screen-by-screen rollout, not a big-bang rewrite, matching how the handoff
+> itself was scoped.
 
 ## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6 and 8; step 7's CSV import is backend-only, see below)
 
@@ -93,8 +97,12 @@ inventory and flows this scaffold implements.
 - `features/fees` — the Fee Collection flow (docs/08 §8.4), added as a **Fees section on the
   existing Student Detail screen** rather than a separate screen or tab, matching how the spec
   actually describes the flow ("Teacher opens student → sees pending amount → records payment →
-  receipt"). `RecordPaymentDialog` pre-fills the pending amount and offers Cash/UPI/Bank Transfer
-  as single-tap chips. Deferred, documented in docs/07-roadmap.md's Phase 4 step 6 entry:
+  receipt"). `RecordPaymentScreen` pre-fills the pending amount and offers Cash/UPI/Bank Transfer
+  as single-tap chips; a successful record pushes `ReceiptScreen`, a confirmation screen with the
+  paid amount, method, a receipt reference (the client-generated idempotency key — the payment
+  endpoint returns the raw saved entity, not a stable response DTO, so this pass shows the value
+  already known to be unique and durable rather than parse an unverified shape), and the
+  remaining balance. Deferred, documented in docs/07-roadmap.md's Phase 4 step 6 entry:
   fee-structure/discount/invoice-generation management UI, gateway payment UI, refund UI, and
   the institute revenue-summary UI — the Teacher dashboard's Fees *tab* still shows "coming soon"
   for this reason (an aggregate fee-overview screen wasn't built this pass; fee collection today

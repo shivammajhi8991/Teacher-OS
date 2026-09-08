@@ -119,9 +119,23 @@ class ClassDetailScreen extends ConsumerWidget {
     );
   }
 
+  static String _hhmm(String hhmmss) => hhmmss.substring(0, 5); // "16:00:00" → "16:00"
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final classAsync = ref.watch(classDetailProvider(classId));
+    // Modernist redesign — QuickAttendanceScreen's header wants the class name and a
+    // schedule label; already-cached (same provider _ScheduleSection below watches), so this
+    // costs no extra request.
+    final scheduleAsync = ref.watch(classScheduleProvider(classId));
+    final scheduleLabel = scheduleAsync.maybeWhen(
+      data: (result) => result.fold(
+        (_) => null,
+        (schedule) =>
+            schedule == null ? null : '${_hhmm(schedule.startTime)} — ${_hhmm(schedule.endTime)}',
+      ),
+      orElse: () => null,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Class')),
@@ -149,7 +163,13 @@ class ClassDetailScreen extends ConsumerWidget {
                   Expanded(
                     child: FilledButton.icon(
                       onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => QuickAttendanceScreen(classId: classId)),
+                        MaterialPageRoute(
+                          builder: (_) => QuickAttendanceScreen(
+                            classId: classId,
+                            className: cls.name,
+                            scheduleLabel: scheduleLabel,
+                          ),
+                        ),
                       ),
                       icon: const Icon(Icons.fact_check_outlined),
                       label: const Text('Take Attendance'),

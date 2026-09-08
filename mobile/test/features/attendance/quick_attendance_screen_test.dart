@@ -67,6 +67,16 @@ class _FakeAttendanceRepository implements AttendanceRepository {
 
 // docs/05 §5.7 — widget test for docs/08 §8.3's flagship flow: every student defaults to
 // Present with zero taps, and tapping Save submits exactly that for a fully-present class.
+//
+// Modernist redesign (design_handoff_modernist/README.md): each roster row now carries all four
+// states as an `MSegmented` control — direct selection, not the old cycling `ActionChip` — and
+// renders its option labels upper-cased ("PRESENT", not "Present"). Both tests below were
+// rewritten against that: the first no longer asserts on literal on-screen "Present" text (every
+// row always shows all four upper-cased labels regardless of which is selected, so text presence
+// alone no longer distinguishes "selected" from "just an option"; the submitted records are the
+// real assertion) and the second — previously named for a "cycle" that no longer exists — now
+// taps a specific student's ABSENT segment directly and confirms only that student's submitted
+// status changed.
 void main() {
   testWidgets('defaults every student to Present so a fully-present class needs zero extra taps', (
     tester,
@@ -86,9 +96,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Present'), findsNWidgets(2));
+    expect(find.text('Aarav Shah'), findsOneWidget);
+    expect(find.text('Diya Mehta'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ElevatedButton, 'Save'));
+    // MPrimaryAction wraps the save bar in the only ElevatedButton on this screen; its label is
+    // dynamic ("Save · all 2 present"), so byType is the stable way to find it.
+    await tester.tap(find.byType(ElevatedButton));
     await tester.pumpAndSettle();
 
     expect(fakeRepository.bulkMarkCalled, isTrue);
@@ -96,26 +109,39 @@ void main() {
     expect(fakeRepository.lastRecords!.every((r) => r.status == 'present'), isTrue);
   });
 
-  testWidgets('tapping a student cycles their status away from the Present default', (tester) async {
-    final fakeRepository = _FakeAttendanceRepository();
+  testWidgets(
+    "tapping a student's Absent segment marks just that student absent (direct select, not cycling)",
+    (tester) async {
+      final fakeRepository = _FakeAttendanceRepository();
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          attendanceRepositoryProvider.overrideWithValue(fakeRepository),
-          syncEngineProvider.overrideWith(() => _FakeSyncEngine()),
-        ],
-        child: const MaterialApp(
-          home: QuickAttendanceScreen(classId: 'class-1', initialDate: '2026-01-05'),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            attendanceRepositoryProvider.overrideWithValue(fakeRepository),
+            syncEngineProvider.overrideWith(() => _FakeSyncEngine()),
+          ],
+          child: const MaterialApp(
+            home: QuickAttendanceScreen(classId: 'class-1', initialDate: '2026-01-05'),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Present').first);
-    await tester.pumpAndSettle();
+      // "ABSENT" appears once in the pinned count strip's own MStatCells (not tappable there)
+      // plus once per roster row's MSegmented — index 0 is the count strip, so index 1 is Aarav
+      // Shah's row (the fake roster lists him first).
+      await tester.tap(find.text('ABSENT').at(1));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Absent'), findsOneWidget);
-    expect(find.text('Present'), findsOneWidget); // the other student stays Present
-  });
+      await tester.tap(find.byType(ElevatedButton));
+      await tester.pumpAndSettle();
+
+      expect(fakeRepository.bulkMarkCalled, isTrue);
+      final statusByStudentId = {
+        for (final r in fakeRepository.lastRecords!) r.studentId: r.status,
+      };
+      expect(statusByStudentId['s1'], 'absent'); // Aarav Shah — the one segment we tapped
+      expect(statusByStudentId['s2'], 'present'); // Diya Mehta — untouched, stays default
+    },
+  );
 }

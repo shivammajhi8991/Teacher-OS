@@ -18,6 +18,19 @@ inventory and flows this scaffold implements.
 > committed for the first time this step too — standard practice for a Flutter **application**
 > (unlike a package/plugin), and only possible now that a real `pub get` has actually run here.
 
+> **Visual design**: the app used a placeholder `ColorScheme.fromSeed` Material 3 theme (a literal
+> comment in `core/theme/app_theme.dart` said so) until a real design pass — codenamed
+> **Modernist** — landed as a design-system handoff: zero corner radius, 2px rules instead of
+> cards, one accent colour (`#EC3013`) reserved for the single primary action per screen, and
+> everything set in Archivo. `core/theme/modernist.dart` (`M.*`) is the single source of every
+> colour/type/spacing token — nothing should ever hard-code a value already there. Landed so far:
+> the theme itself (`app_theme.dart`, `modernist_primitives.dart`'s six shared widgets), the
+> Teacher dashboard, and Quick Attendance (redesigned around direct-select `MSegmented` rows
+> instead of the old cycling `ActionChip` — one tap for any status, not up to four). Every other
+> screen still renders in the old placeholder theme's now-overridden `ThemeData`, which reads as
+> "the same rules and zero radius, but the old layout" until each gets its own redesign pass — a
+> screen-by-screen rollout, not a big-bang rewrite, matching how the handoff itself was scoped.
+
 ## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6 and 8; step 7's CSV import is backend-only, see below)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
@@ -227,6 +240,23 @@ Point the app at your local backend (see `../backend/README.md`) via `--dart-def
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000/api/v1   # Android emulator
 flutter run --dart-define=API_BASE_URL=http://localhost:3000/api/v1  # iOS simulator
 ```
+
+For a **physical Android device over USB** (Phase 6 step 1's own real-device verification used
+this): `adb reverse tcp:3000 tcp:3000` forwards the device's own `localhost:3000` to this machine's
+over the USB debugging connection, so the default `API_BASE_URL` (`http://localhost:3000/api/v1`)
+just works with no `--dart-define` needed — no shared Wi-Fi network required either. MIUI/Xiaomi
+devices need **Settings → Developer options → Install via USB** enabled separately from USB
+debugging itself, or `adb install`/`flutter run` fails with `INSTALL_FAILED_USER_RESTRICTED`.
+
+The `android/` platform folder (Phase 6 step 1) was generated via `flutter create
+--platforms=android .` against a real Flutter 3.47.2 SDK — the first time this project has ever
+had one. `flutter create` also rewrote `test/widget_test.dart` with its own default counter-app
+template; that file is deleted, not committed, since it references a `MyApp` this app doesn't
+have. No `ios/`/`web/` platform folders exist yet — same command with `--platforms=ios` or
+`--platforms=web` (docs/02 §2.8's Admin Web Panel target) would add those the same way, whenever
+there's a macOS machine (for iOS) or a reason to actually build the Admin Panel as a literal
+second web target rather than just its presentation-layer source (see `features/admin/`'s own
+comment).
 
 ## Testing
 

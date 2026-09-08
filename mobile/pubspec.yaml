@@ -59,3 +59,14 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   generate: true # ARB → AppLocalizations, see l10n.yaml
+
+  # Modernist design system (design_handoff_modernist/README.md) — the whole system is set in
+  # Archivo and nothing renders correctly without it, since `M.family` and `ThemeData.fontFamily`
+  # both name it. One variable-font file rather than three static weights: Google Fonts ships
+  # Archivo as a variable font only (no static per-weight TTFs in the upstream repo any more) —
+  # Flutter/Skia resolves FontWeight.w400/w600/w800 from its own wght axis directly, so a single
+  # asset entry with no per-weight `weight:` list is the correct registration, not a workaround.
+  fonts:
+    - family: Archivo
+      fonts:
+        - asset: assets/fonts/Archivo-Variable.ttf

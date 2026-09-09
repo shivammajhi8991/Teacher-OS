@@ -41,11 +41,15 @@ inventory and flows this scaffold implements.
 > "Pay ₹2,400" — Parent has read-only fee access by product decision, docs/06 §6.2, not a missing
 > feature; the prototype's "From the teacher" note has no backing data anywhere in this system —
 > `Announcement` is broadcast, not a private per-child note — so it's left out rather than
-> invented). Every other screen still renders in the old placeholder theme's now-overridden
-> `ThemeData`,
-> which reads as "the same rules and zero radius, but the old layout" until each gets its own
-> redesign pass — a screen-by-screen rollout, not a big-bang rewrite, matching how the handoff
-> itself was scoped.
+> invented), and Fees overview (new `FeesOverviewScreen`, wired to the Teacher shell's Fees tab —
+> previously "coming soon" — now that `GET /invoices` and `feesOverviewProvider` exist to back
+> it; the prototype's "Send reminders to N overdue" isn't here, since unlike Receipt's "send
+> receipt" there's no reminder-sending capability anywhere in this system, automatic or manual,
+> to point it at). **That's every screen design_handoff_modernist/README.md named** — every
+> screen it didn't name (the class/student/announcement lists, the account/notification/more-menu
+> screens, Register) still renders in the old placeholder theme's now-overridden `ThemeData`,
+> which reads as "the same rules and zero radius, but the old layout" since they were never part
+> of this handoff's own scope to begin with.
 
 ## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6 and 8; step 7's CSV import is backend-only, see below)
 
@@ -117,13 +121,13 @@ inventory and flows this scaffold implements.
   already known to be unique and durable rather than parse an unverified shape), and the
   remaining balance. Deferred, documented in docs/07-roadmap.md's Phase 4 step 6 entry:
   fee-structure/discount/invoice-generation management UI, gateway payment UI, refund UI, and
-  the institute revenue-summary UI — the Teacher dashboard's Fees *tab* still shows "coming soon"
-  for this reason (fee collection today happens per-student via the Fees section). The blocker
-  named against a Fees *overview* screen (design_handoff_modernist/README.md: "needs a
-  teacher-scoped invoice list") is gone — `GET /invoices` (new, `fees.controller.ts`) and
-  `feesOverviewProvider` (new, `fees_providers.dart`) now exist, server-scoped to the caller's
-  own students (teacher), institute (institute_admin), or everyone (super_admin), sorted overdue
-  first. The screen itself isn't built yet — this was the provider/endpoint groundwork only.
+  the institute revenue-summary UI. The Teacher dashboard's Fees *tab* no longer shows
+  "coming soon": `FeesOverviewScreen` is wired there now, backed by a new `GET /invoices`
+  (`fees.controller.ts`) and `feesOverviewProvider` (`fees_providers.dart`) — server-scoped to
+  the caller's own students (teacher), institute (institute_admin), or everyone (super_admin),
+  sorted overdue first. Per-student fee collection still happens via the Student Detail Fees
+  section above; this tab is the aggregate "who owes what" view across every student the caller
+  can see.
 - `features/notes` — a **Notes section on the existing Class Detail screen**, scoped to
   **link-type notes only** (documented in docs/07-roadmap.md's Phase 4 step 7 entry): a real
   file-upload/download UI needs `file_picker` and a way to open/preview a file on-device,

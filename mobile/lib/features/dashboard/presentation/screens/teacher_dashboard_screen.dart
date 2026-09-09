@@ -6,6 +6,7 @@ import '../../../calendar/domain/entities/calendar_event.dart';
 import '../../../calendar/presentation/providers/calendar_providers.dart';
 import '../../../calendar/presentation/screens/calendar_screen.dart';
 import '../../../classes/presentation/screens/class_list_screen.dart';
+import '../../../fees/presentation/screens/fees_overview_screen.dart';
 import '../../../students/presentation/screens/student_list_screen.dart';
 import '../widgets/role_dashboard_scaffold.dart';
 import 'more_menu_screen.dart';
@@ -64,6 +65,7 @@ class TeacherDashboardScreen extends ConsumerWidget {
       tabBuilders: {
         1: (context) => const ClassListScreen(), // docs/07 Phase 4 step 4
         2: (context) => const StudentListScreen(), // docs/07 Phase 4 step 3
+        3: (context) => const FeesOverviewScreen(), // Modernist redesign — was "coming soon"
         4: (context) => const MoreMenuScreen(), // docs/07 Phase 5 step 5
       },
       nextUp: next == null

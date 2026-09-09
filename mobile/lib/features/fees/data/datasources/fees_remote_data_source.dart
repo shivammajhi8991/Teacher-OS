@@ -10,6 +10,15 @@ class FeesRemoteDataSource {
     return response.data as List<dynamic>;
   }
 
+  /// docs/08 §8.2 "Fees overview" — the cross-student list `GET /students/:id/invoices` can't
+  /// give. Scoping (which students' invoices come back) is entirely server-side, same as every
+  /// other role-scoped list in this app (`GET /students`, `GET /calendar`) — this call carries no
+  /// owner filter, only `status`.
+  Future<List<dynamic>> getInvoiceOverview({String status = 'outstanding'}) async {
+    final response = await _dio.get('/invoices', queryParameters: {'status': status});
+    return response.data as List<dynamic>;
+  }
+
   Future<void> recordPayment({
     required String invoiceId,
     required double amount,

@@ -118,8 +118,12 @@ inventory and flows this scaffold implements.
   remaining balance. Deferred, documented in docs/07-roadmap.md's Phase 4 step 6 entry:
   fee-structure/discount/invoice-generation management UI, gateway payment UI, refund UI, and
   the institute revenue-summary UI — the Teacher dashboard's Fees *tab* still shows "coming soon"
-  for this reason (an aggregate fee-overview screen wasn't built this pass; fee collection today
-  happens per-student via the Fees section)
+  for this reason (fee collection today happens per-student via the Fees section). The blocker
+  named against a Fees *overview* screen (design_handoff_modernist/README.md: "needs a
+  teacher-scoped invoice list") is gone — `GET /invoices` (new, `fees.controller.ts`) and
+  `feesOverviewProvider` (new, `fees_providers.dart`) now exist, server-scoped to the caller's
+  own students (teacher), institute (institute_admin), or everyone (super_admin), sorted overdue
+  first. The screen itself isn't built yet — this was the provider/endpoint groundwork only.
 - `features/notes` — a **Notes section on the existing Class Detail screen**, scoped to
   **link-type notes only** (documented in docs/07-roadmap.md's Phase 4 step 7 entry): a real
   file-upload/download UI needs `file_picker` and a way to open/preview a file on-device,

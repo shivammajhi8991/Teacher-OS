@@ -2,9 +2,11 @@ import 'package:dio/dio.dart';
 import '../../../../core/network/api_exception_mapper.dart';
 import '../../../../core/utils/result.dart';
 import '../../domain/entities/invoice_summary.dart';
+import '../../domain/entities/student_invoice_overview.dart';
 import '../../domain/repositories/fees_repository.dart';
 import '../datasources/fees_remote_data_source.dart';
 import '../dto/invoice_summary_dto.dart';
+import '../dto/student_invoice_overview_dto.dart';
 
 class FeesRepositoryImpl implements FeesRepository {
   const FeesRepositoryImpl(this._remoteDataSource);
@@ -19,6 +21,21 @@ class FeesRepositoryImpl implements FeesRepository {
           .map((item) => InvoiceSummaryDto.fromJson(item as Map<String, dynamic>).toEntity())
           .toList();
       return Ok(invoices);
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<List<StudentInvoiceOverview>>> getInvoiceOverview({
+    String status = 'outstanding',
+  }) async {
+    try {
+      final json = await _remoteDataSource.getInvoiceOverview(status: status);
+      final overview = json
+          .map((item) => StudentInvoiceOverviewDto.fromJson(item as Map<String, dynamic>).toEntity())
+          .toList();
+      return Ok(overview);
     } on DioException catch (e) {
       return Err(mapDioExceptionToFailure(e));
     }

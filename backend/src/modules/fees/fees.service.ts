@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, In, LessThanOrEqual, Repository } from 'typeorm';
+import { Between, In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { FeeStructure } from './entities/fee-structure.entity';
 import { Discount, DiscountType } from './entities/discount.entity';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
@@ -73,6 +73,15 @@ export interface InvoiceSummary {
   status: InvoiceStatus;
   dueDate: string;
   issuedAt: Date;
+}
+
+// docs/08 §8.2 "Fees overview" (mobile's Modernist redesign pass) — the aggregate, cross-student
+// view `GET /students/:id/invoices` can't give: "which of my students owe money, worst first."
+// Same `InvoiceSummary` shape plus who it belongs to, since this is the only endpoint here that
+// ever mixes more than one student's invoices into one list.
+export interface StudentInvoiceOverviewItem extends InvoiceSummary {
+  studentId: string;
+  studentName: string;
 }
 
 export interface RevenueSummary {
@@ -435,6 +444,86 @@ export class FeesService {
     return Promise.all(
       invoices.map((invoice) => this.toInvoiceSummary(invoice)),
     );
+  }
+
+  // docs/08 §8.2 "Fees overview" — "which of my students owe money, worst first." Same
+  // self/parent/teacher/admin access model as everywhere else in this module, but expressed as a
+  // list query (which students can this caller see invoices for) rather than
+  // `hasStudentFinanceAccess`'s single-student check, since there's no one studentId to check
+  // against here. Parent and student callers already have their own scope via
+  // `getStudentInvoices` (their linked child's / their own invoices) — this endpoint is for the
+  // cross-student view only teacher/institute_admin/super_admin ever need, so they're refused
+  // here rather than given a second, redundant path to the same data.
+  async getInvoiceOverview(
+    requester: AuthenticatedUser,
+    status: 'outstanding' | 'all',
+  ): Promise<StudentInvoiceOverviewItem[]> {
+    let invoices: Invoice[];
+
+    if (requester.activeRole === 'super_admin') {
+      invoices = await this.invoiceRepo.find({ relations: { student: true } });
+    } else if (requester.activeRole === 'institute_admin') {
+      if (!requester.instituteId) return [];
+      invoices = await this.invoiceRepo.find({
+        where: { institute: { id: requester.instituteId } },
+        relations: { student: true },
+      });
+    } else if (requester.activeRole === 'teacher') {
+      const teacherProfile = await this.teacherProfilesService.findByUserId(
+        requester.userId,
+      );
+      if (!teacherProfile) return [];
+
+      // Ongoing assignments only (`assignedTo IS NULL`) — "my students," matching
+      // StudentsService.findAll's own teacher branch, not `hasStudentFinanceAccess`'s looser
+      // "ever assigned" check (that one only ever gates a single already-known student, where a
+      // lapsed assignment still explains an old invoice; a roster-style overview should reflect
+      // who the teacher actually teaches right now).
+      const assignments = await this.assignmentRepo.find({
+        where: {
+          teacherProfile: { id: teacherProfile.id },
+          assignedTo: IsNull(),
+        },
+        relations: { student: true },
+      });
+      const studentIds = assignments.map((a) => a.student.id);
+      if (studentIds.length === 0) return [];
+
+      invoices = await this.invoiceRepo.find({
+        where: { student: { id: In(studentIds) } },
+        relations: { student: true },
+      });
+    } else {
+      throw new ForbiddenException({
+        code: 'NOT_AUTHORIZED_FOR_INVOICE_OVERVIEW',
+        message:
+          'This role has no cross-student invoice overview — see your own invoices instead',
+      });
+    }
+
+    const summaries = await Promise.all(
+      invoices.map(async (invoice) => {
+        const summary = await this.toInvoiceSummary(invoice);
+        return {
+          ...summary,
+          studentId: invoice.student.id,
+          studentName: invoice.student.fullName,
+        };
+      }),
+    );
+
+    const filtered =
+      status === 'outstanding'
+        ? summaries.filter((s) => round2(s.totalAmount - s.paidTotal) > 0)
+        : summaries;
+
+    // Overdue first (docs-handoff "OVERDUE FIRST"), then soonest/most-overdue due date.
+    return filtered.sort((a, b) => {
+      const aOverdue = a.status === InvoiceStatus.OVERDUE;
+      const bOverdue = b.status === InvoiceStatus.OVERDUE;
+      if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
   }
 
   async createCreditNote(

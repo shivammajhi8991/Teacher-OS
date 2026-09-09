@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { In } from 'typeorm';
 import { FeesService } from './fees.service';
 import { FeeStructure } from './entities/fee-structure.entity';
 import { Discount } from './entities/discount.entity';
@@ -80,7 +81,7 @@ describe('FeesService', () => {
     findOne: jest.fn(),
     find: jest.fn().mockResolvedValue([]),
   };
-  const assignmentRepo = { findOne: jest.fn() };
+  const assignmentRepo = { findOne: jest.fn(), find: jest.fn() };
   const attendanceSessionRepo = { find: jest.fn().mockResolvedValue([]) };
   const attendanceRecordRepo = { count: jest.fn().mockResolvedValue(0) };
   const payoutRepo = {
@@ -386,6 +387,144 @@ describe('FeesService', () => {
         }),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(refundRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getInvoiceOverview', () => {
+    const instituteAdmin: AuthenticatedUser = {
+      userId: 'user-admin',
+      activeRole: 'institute_admin',
+      instituteId: 'institute-1',
+    };
+    const parent: AuthenticatedUser = {
+      userId: 'user-parent',
+      activeRole: 'parent',
+      instituteId: null,
+    };
+
+    const overdueInvoice = {
+      id: 'invoice-overdue',
+      student: { id: 'student-1', fullName: 'Aarav Shah' },
+      institute: null,
+      subtotal: '1000.00',
+      discountTotal: '0.00',
+      lateFeeTotal: '0.00',
+      totalAmount: '1000.00',
+      currency: 'INR',
+      status: InvoiceStatus.OVERDUE,
+      dueDate: '2026-01-01',
+      issuedAt: new Date('2025-12-01'),
+    };
+    const dueLaterInvoice = {
+      id: 'invoice-due-later',
+      student: { id: 'student-1', fullName: 'Aarav Shah' },
+      institute: null,
+      subtotal: '500.00',
+      discountTotal: '0.00',
+      lateFeeTotal: '0.00',
+      totalAmount: '500.00',
+      currency: 'INR',
+      status: InvoiceStatus.ISSUED,
+      dueDate: '2026-03-01',
+      issuedAt: new Date('2026-02-01'),
+    };
+    const paidInvoice = {
+      id: 'invoice-paid',
+      student: { id: 'student-1', fullName: 'Aarav Shah' },
+      institute: null,
+      subtotal: '200.00',
+      discountTotal: '0.00',
+      lateFeeTotal: '0.00',
+      totalAmount: '200.00',
+      currency: 'INR',
+      status: InvoiceStatus.PAID,
+      dueDate: '2026-01-15',
+      issuedAt: new Date('2026-01-01'),
+    };
+
+    it("scopes a teacher's overview to students with an ongoing assignment, not every student ever assigned", async () => {
+      assignmentRepo.find.mockResolvedValue([{ student: { id: 'student-1' } }]);
+      invoiceRepo.find.mockResolvedValue([overdueInvoice]);
+
+      await service.getInvoiceOverview(teacher, 'outstanding');
+
+      expect(assignmentRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            teacherProfile: { id: 'teacher-profile-1' },
+          }),
+        }),
+      );
+      expect(invoiceRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { student: { id: In(['student-1']) } },
+        }),
+      );
+    });
+
+    it('returns an empty list, not every invoice, for a teacher with no ongoing assignments', async () => {
+      assignmentRepo.find.mockResolvedValue([]);
+
+      const result = await service.getInvoiceOverview(teacher, 'outstanding');
+
+      expect(result).toEqual([]);
+      expect(invoiceRepo.find).not.toHaveBeenCalled();
+    });
+
+    it('filters out fully-paid invoices under status=outstanding and sorts overdue first', async () => {
+      assignmentRepo.find.mockResolvedValue([{ student: { id: 'student-1' } }]);
+      invoiceRepo.find.mockResolvedValue([
+        dueLaterInvoice,
+        paidInvoice,
+        overdueInvoice,
+      ]);
+      // getFinancials derives paidTotal from actual Payment rows, not an invoice's cached
+      // `status` label — so a realistic "fully paid" fixture needs a matching payment record,
+      // same as `paidInvoice` would actually have against Postgres.
+      paymentRepo.find.mockImplementation(({ where }) =>
+        Promise.resolve(
+          where.invoice.id === 'invoice-paid'
+            ? [{ status: PaymentStatus.CONFIRMED, amount: '200.00' }]
+            : [],
+        ),
+      );
+
+      const result = await service.getInvoiceOverview(teacher, 'outstanding');
+
+      expect(result.map((r) => r.id)).toEqual([
+        'invoice-overdue',
+        'invoice-due-later',
+      ]);
+      expect(result[0].studentName).toBe('Aarav Shah');
+    });
+
+    it('keeps a fully-paid invoice under status=all', async () => {
+      assignmentRepo.find.mockResolvedValue([{ student: { id: 'student-1' } }]);
+      invoiceRepo.find.mockResolvedValue([paidInvoice]);
+
+      const result = await service.getInvoiceOverview(teacher, 'all');
+
+      expect(result.map((r) => r.id)).toEqual(['invoice-paid']);
+    });
+
+    it("scopes an institute_admin's overview by institute, not by teacher assignment", async () => {
+      invoiceRepo.find.mockResolvedValue([overdueInvoice]);
+
+      await service.getInvoiceOverview(instituteAdmin, 'outstanding');
+
+      expect(assignmentRepo.find).not.toHaveBeenCalled();
+      expect(invoiceRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { institute: { id: 'institute-1' } },
+        }),
+      );
+    });
+
+    it('refuses a role with no cross-student overview of its own, rather than leaking every invoice', async () => {
+      await expect(
+        service.getInvoiceOverview(parent, 'outstanding'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(invoiceRepo.find).not.toHaveBeenCalled();
     });
   });
 

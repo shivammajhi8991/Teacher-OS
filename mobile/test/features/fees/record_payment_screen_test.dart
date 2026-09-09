@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teacheros/core/utils/result.dart';
 import 'package:teacheros/features/fees/domain/entities/invoice_summary.dart';
+import 'package:teacheros/features/fees/domain/entities/student_invoice_overview.dart';
 import 'package:teacheros/features/fees/domain/repositories/fees_repository.dart';
 import 'package:teacheros/features/fees/presentation/providers/fees_providers.dart';
 import 'package:teacheros/features/fees/presentation/screens/receipt_screen.dart';
@@ -13,6 +14,12 @@ class _FakeFeesRepository implements FeesRepository {
 
   @override
   Future<Result<List<InvoiceSummary>>> getStudentInvoices(String studentId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Result<List<StudentInvoiceOverview>>> getInvoiceOverview({
+    String status = 'outstanding',
+  }) =>
       throw UnimplementedError();
 
   @override

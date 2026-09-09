@@ -104,6 +104,7 @@ POST   /api/v1/attendance/qr/scan                          # student-side check-
 POST/GET   /api/v1/fee-structures
 POST       /api/v1/invoices/generate                       # batch-generate for a billing period
 GET        /api/v1/students/:id/invoices
+GET        /api/v1/invoices                                 # cross-student overview: ?status=outstanding|all, scoped server-side (teacher/institute_admin/super_admin only)
 POST       /api/v1/invoices/:id/credit-notes                # only way to correct an issued invoice
 POST       /api/v1/payments                                  # offline record (cash/UPI/bank) — idempotent
 POST       /api/v1/payments/gateway/initiate                  # returns gateway session

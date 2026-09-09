@@ -78,6 +78,23 @@ export class FeesController {
     return this.feesService.getStudentInvoices(studentId, user);
   }
 
+  // docs/08 §8.2 "Fees overview" — the cross-student list `GET /students/:id/invoices` can't
+  // give. `fee.read`, same as that route: this is still reading invoices, not moving money: the
+  // role check that actually decides *whose* invoices come back lives in
+  // FeesService.getInvoiceOverview, same as every other self/parent/teacher/admin split in this
+  // module.
+  @RequirePermission('fee.read')
+  @Get('invoices')
+  getInvoiceOverview(
+    @Query('status') status: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.feesService.getInvoiceOverview(
+      user,
+      status === 'all' ? 'all' : 'outstanding',
+    );
+  }
+
   @RequirePermission('fee.manage')
   @Post('invoices/:id/credit-notes')
   createCreditNote(

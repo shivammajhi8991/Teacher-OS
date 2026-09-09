@@ -18,3 +18,11 @@ final feesRepositoryProvider = Provider<FeesRepository>((ref) {
 final studentInvoicesProvider = FutureProvider.autoDispose.family((ref, String studentId) {
   return ref.watch(feesRepositoryProvider).getStudentInvoices(studentId);
 });
+
+/// docs/08 §8.2 "Fees overview" — "which of my students owe money, worst first," scoped
+/// server-side to the caller's role (teacher: their own students; institute_admin: their
+/// institute; super_admin: everyone). No params: unlike `studentInvoicesProvider`, there's no
+/// single owner to key a family provider by.
+final feesOverviewProvider = FutureProvider.autoDispose((ref) {
+  return ref.watch(feesRepositoryProvider).getInvoiceOverview();
+});

@@ -51,7 +51,7 @@ inventory and flows this scaffold implements.
 > which reads as "the same rules and zero radius, but the old layout" since they were never part
 > of this handoff's own scope to begin with.
 
-## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–6 and 8; step 7's CSV import is backend-only, see below)
+## Implemented so far (docs/07 Phase 4 — complete, all 8 steps — plus Phase 5 steps 1–8, all complete)
 
 - `app/` — `MaterialApp.router` shell, Material 3 light/dark theme, go_router with
   protected-by-default RBAC-style redirect (docs/05 §5.3)
@@ -91,13 +91,18 @@ inventory and flows this scaffold implements.
   still deferred here — the presigned-URL flow it needs now exists on the backend (it shipped
   with Notes, step 7 below), this screen just doesn't call it yet
 - `features/students` — list (status/search filters), add (with an optional inline guardian,
-  per spec §3), detail (edit/archive/add-guardian), and an invite-code dialog; wired into the
-  Teacher dashboard's Students tab (`RoleDashboardScaffold.tabBuilders`). docs/08 §8.2's
-  "Add/invite student" row lists "import CSV" as a third FAB option (Phase 5 step 7) — the
-  backend (`POST /students/import`, multipart) is real and fully usable from any HTTP client, but
-  no mobile screen exists for it: picking a local CSV file needs `file_picker` (or equivalent),
-  the same missing pubspec dependency already documented below as the reason Notes/Assignments
-  stayed link-only, so it's deferred here for the identical reason rather than half-built
+  per spec §3), detail (edit/archive/add-guardian), an invite-code dialog, and now **CSV import**
+  (docs/08 §8.2's third "Add/invite student" FAB-row option, Phase 5 step 7) — `StudentImportScreen`,
+  reached from a new app-bar action next to Invite. Pulled in `file_picker` (the same dependency
+  every other "needs a file" deferral in this README pointed at) to pick a `.csv` via the
+  platform's own document picker — Storage Access Framework on Android, UIDocumentPicker on
+  iOS — with `withData: true` so this app gets file bytes directly and never needs a storage
+  permission for a single pick. `POST /students/import` returns 202 + a job in `pending`
+  immediately; the screen polls `GET /students/import-jobs/:id` (1.5s, up to 20 tries) until the
+  backend's own fire-and-forget job reaches `completed`/`failed`, then shows real totals
+  (imported/failed counts) and every per-row error — one malformed row never fails the whole
+  file, so the result is never a single pass/fail verdict. All wired into the Teacher dashboard's
+  Students tab (`RoleDashboardScaffold.tabBuilders`)
 - `features/classes` — list/create/edit, a schedule builder (weekday checkboxes generating an
   RFC 5545 rule, with the generated string editable directly for daily/monthly/custom cases),
   a live conflict-check panel, and a roster with enroll / waitlist-on-capacity. Deferred and
@@ -133,8 +138,10 @@ inventory and flows this scaffold implements.
   can see.
 - `features/notes` — a **Notes section on the existing Class Detail screen**, scoped to
   **link-type notes only** (documented in docs/07-roadmap.md's Phase 4 step 7 entry): a real
-  file-upload/download UI needs `file_picker` and a way to open/preview a file on-device,
-  neither pulled into this pass as a new pubspec dependency. "Add link" creates a `link`
+  file-upload/download UI needs picking a file *and* a way to open/preview one on-device.
+  `file_picker` is a real dependency now (pulled in for Student CSV import, below) — picking a
+  file is no longer the blocker here — but a viewer/opener for whatever gets picked still isn't,
+  so upload stays out of scope for this entry specifically. "Add link" creates a `link`
   document tagged `folderName = classId` and shares it with the class in one dialog (title +
   URL, ≤3 taps); the section lists it back by filtering `GET /documents` client-side on that
   same tag — a listing convenience only, not the access-control boundary (that's still the

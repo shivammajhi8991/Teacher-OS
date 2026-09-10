@@ -1,8 +1,10 @@
+import 'dart:typed_data';
 import '../../../../core/utils/result.dart';
 import '../entities/guardian_info.dart';
 import '../entities/guardian_input.dart';
 import '../entities/student.dart';
 import '../entities/student_detail.dart';
+import '../entities/student_import_job.dart';
 
 abstract interface class StudentsRepository {
   Future<Result<Student>> createStudent({
@@ -44,6 +46,12 @@ abstract interface class StudentsRepository {
   /// docs/04 §4.4 POST /students/invite — code generation only, see student-invite.entity.ts on
   /// the backend for why redemption isn't wired up yet.
   Future<Result<StudentInviteResult>> createInvite({int? expiresInDays});
+
+  /// docs/04 §4.4 POST /students/import — returns immediately (202) with the job in `pending`.
+  Future<Result<StudentImportJob>> createImportJob(Uint8List fileBytes, String filename);
+
+  /// docs/04 §4.7 GET /students/import-jobs/:id — poll this until `StudentImportJob.isDone`.
+  Future<Result<StudentImportJob>> getImportJob(String id);
 }
 
 class StudentInviteResult {

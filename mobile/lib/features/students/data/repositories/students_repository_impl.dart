@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../../../core/network/api_exception_mapper.dart';
 import '../../../../core/utils/result.dart';
@@ -5,11 +6,13 @@ import '../../domain/entities/guardian_info.dart';
 import '../../domain/entities/guardian_input.dart';
 import '../../domain/entities/student.dart';
 import '../../domain/entities/student_detail.dart';
+import '../../domain/entities/student_import_job.dart';
 import '../../domain/repositories/students_repository.dart';
 import '../datasources/students_remote_data_source.dart';
 import '../dto/guardian_summary_dto.dart';
 import '../dto/student_detail_dto.dart';
 import '../dto/student_dto.dart';
+import '../dto/student_import_job_dto.dart';
 
 class StudentsRepositoryImpl implements StudentsRepository {
   const StudentsRepositoryImpl(this._remoteDataSource);
@@ -128,6 +131,26 @@ class StudentsRepositoryImpl implements StudentsRepository {
         reason: reason,
       );
       return const Ok(null);
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<StudentImportJob>> createImportJob(Uint8List fileBytes, String filename) async {
+    try {
+      final json = await _remoteDataSource.createImportJob(fileBytes, filename);
+      return Ok(StudentImportJobDto.fromJson(json).toEntity());
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<StudentImportJob>> getImportJob(String id) async {
+    try {
+      final json = await _remoteDataSource.getImportJob(id);
+      return Ok(StudentImportJobDto.fromJson(json).toEntity());
     } on DioException catch (e) {
       return Err(mapDioExceptionToFailure(e));
     }

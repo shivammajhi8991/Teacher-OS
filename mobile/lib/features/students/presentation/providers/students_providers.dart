@@ -5,8 +5,10 @@ import '../../data/repositories/students_repository_impl.dart';
 import '../../domain/repositories/students_repository.dart';
 import '../../domain/usecases/add_guardian_usecase.dart';
 import '../../domain/usecases/archive_student_usecase.dart';
+import '../../domain/usecases/create_import_job_usecase.dart';
 import '../../domain/usecases/create_invite_usecase.dart';
 import '../../domain/usecases/create_student_usecase.dart';
+import '../../domain/usecases/get_import_job_usecase.dart';
 import '../../domain/usecases/get_student_detail_usecase.dart';
 import '../../domain/usecases/list_students_usecase.dart';
 import '../../domain/usecases/merge_students_usecase.dart';
@@ -36,6 +38,10 @@ final mergeStudentsUseCaseProvider =
     Provider((ref) => MergeStudentsUseCase(ref.watch(studentsRepositoryProvider)));
 final createInviteUseCaseProvider =
     Provider((ref) => CreateInviteUseCase(ref.watch(studentsRepositoryProvider)));
+final createImportJobUseCaseProvider =
+    Provider((ref) => CreateImportJobUseCase(ref.watch(studentsRepositoryProvider)));
+final getImportJobUseCaseProvider =
+    Provider((ref) => GetImportJobUseCase(ref.watch(studentsRepositoryProvider)));
 
 /// docs/08 §8.2 Student list — filters live as simple state here rather than route query params,
 /// since this scaffold has one list screen, not a deep-linkable filtered view yet.

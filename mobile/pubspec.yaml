@@ -47,6 +47,12 @@ dependencies:
     sdk: flutter
   intl: ^0.20.3
 
+  # CSV student import (docs/04 §4.4 POST /students/import) — the one mobile screen repeatedly
+  # named elsewhere in this README as deferred specifically for needing this dependency. Uses the
+  # platform's own document picker (Storage Access Framework on Android, UIDocumentPicker on
+  # iOS), so no storage permission/manifest entry is needed for picking a single file.
+  file_picker: ^8.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

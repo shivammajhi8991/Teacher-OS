@@ -8,6 +8,7 @@ import '../../domain/entities/student.dart';
 import '../providers/students_providers.dart';
 import 'student_detail_screen.dart';
 import 'student_form_screen.dart';
+import 'student_import_screen.dart';
 
 /// docs/08 §8.2 "Student list" — search + status filter chips, sorted by name; overdue-first
 /// sorting is a Fees-module concern (docs/08 §8.4), not this screen's.
@@ -32,6 +33,13 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       MaterialPageRoute(builder: (_) => const StudentFormScreen()),
     );
     if (created == true) ref.invalidate(studentListProvider);
+  }
+
+  Future<void> _openImport() async {
+    final imported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const StudentImportScreen()),
+    );
+    if (imported == true) ref.invalidate(studentListProvider);
   }
 
   Future<void> _showInviteDialog() async {
@@ -76,6 +84,11 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       appBar: AppBar(
         title: const Text('Students'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.upload_file_outlined),
+            tooltip: 'Import CSV',
+            onPressed: _openImport,
+          ),
           IconButton(
             icon: const Icon(Icons.person_add_alt_outlined),
             tooltip: 'Invite student',

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:teacheros/features/students/domain/entities/guardian_info.dart';
 import 'package:teacheros/features/students/domain/entities/guardian_input.dart';
 import 'package:teacheros/features/students/domain/entities/student.dart';
 import 'package:teacheros/features/students/domain/entities/student_detail.dart';
+import 'package:teacheros/features/students/domain/entities/student_import_job.dart';
 import 'package:teacheros/features/students/domain/repositories/students_repository.dart';
 import 'package:teacheros/features/students/presentation/providers/students_providers.dart';
 import 'package:teacheros/features/students/presentation/screens/student_list_screen.dart';
@@ -52,6 +54,13 @@ class _FakeStudentsRepository implements StudentsRepository {
   @override
   Future<Result<StudentInviteResult>> createInvite({int? expiresInDays}) =>
       throw UnimplementedError();
+
+  @override
+  Future<Result<StudentImportJob>> createImportJob(Uint8List fileBytes, String filename) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Result<StudentImportJob>> getImportJob(String id) => throw UnimplementedError();
 }
 
 // docs/05 §5.7 — widget test for the primary Student Management screen: empty state when there

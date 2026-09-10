@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../../domain/entities/guardian_input.dart';
 
@@ -84,6 +85,23 @@ class StudentsRemoteDataSource {
       'mergedStudentId': mergedStudentId,
       'reason': reason,
     });
+  }
+
+  /// docs/04 §4.4 POST /students/import, multipart, field name "file" — returns 202 + a job id
+  /// immediately; the real per-row work happens server-side after this resolves.
+  Future<Map<String, dynamic>> createImportJob(Uint8List fileBytes, String filename) async {
+    final response = await _dio.post(
+      '/students/import',
+      data: FormData.fromMap({
+        'file': MultipartFile.fromBytes(fileBytes, filename: filename),
+      }),
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getImportJob(String id) async {
+    final response = await _dio.get('/students/import-jobs/$id');
+    return response.data as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> createInvite({int? expiresInDays}) async {

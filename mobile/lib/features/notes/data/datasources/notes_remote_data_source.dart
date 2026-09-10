@@ -1,9 +1,24 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 class NotesRemoteDataSource {
   const NotesRemoteDataSource(this._dio);
 
   final Dio _dio;
+
+  /// docs/04 §4.4 GET /documents/:id/file — only ever called for a non-`link` document (a link's
+  /// destination is already on `DocumentSummary.externalUrl`, no round trip needed to read it).
+  /// `ResponseType.bytes` is required to read a file response at all; it also means an *error*
+  /// response arrives as raw bytes, not the JSON envelope `mapDioExceptionToFailure` expects —
+  /// see `notes_repository_impl.dart`'s own decoding of that case, matching
+  /// `reports_remote_data_source.dart`'s identical precedent.
+  Future<Uint8List> downloadFile(String documentId) async {
+    final response = await _dio.get<List<int>>(
+      '/documents/$documentId/file',
+      options: Options(responseType: ResponseType.bytes),
+    );
+    return Uint8List.fromList(response.data ?? const []);
+  }
 
   /// GET /documents — every doc.manage app-role sees: their own uploads plus anything shared
   /// with them (institute/class/student targets, resolved server-side). No `classId` filter

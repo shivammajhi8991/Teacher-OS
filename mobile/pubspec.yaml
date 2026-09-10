@@ -53,12 +53,25 @@ dependencies:
   # iOS), so no storage permission/manifest entry is needed for picking a single file.
   file_picker: ^8.1.4
 
+  # Notes/Assignments file viewer — the other half of the "needs file_picker/url_launcher, a way
+  # to open/preview a file on-device" deferral this README named repeatedly. url_launcher opens a
+  # link-type note/attachment in the device's own browser/app; open_filex hands a downloaded
+  # file's bytes to whatever app the OS already associates with its type (a PDF viewer, gallery,
+  # media player) — this app never renders file content itself.
+  url_launcher: ^6.3.1
+  open_filex: ^4.5.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+
+  # file_opener_test.dart fakes UrlLauncherPlatform.instance directly (the plugin's own test
+  # seam) — a transitive dependency of url_launcher, but imported directly here, so it's declared
+  # directly too rather than relying on whatever version url_launcher happens to pull in.
+  url_launcher_platform_interface: ^2.3.2
   drift_dev: ^2.20.3
   build_runner: ^2.4.13
 

@@ -137,16 +137,20 @@ inventory and flows this scaffold implements.
   section above; this tab is the aggregate "who owes what" view across every student the caller
   can see.
 - `features/notes` — a **Notes section on the existing Class Detail screen**, scoped to
-  **link-type notes only** (documented in docs/07-roadmap.md's Phase 4 step 7 entry): a real
-  file-upload/download UI needs picking a file *and* a way to open/preview one on-device.
-  `file_picker` is a real dependency now (pulled in for Student CSV import, below) — picking a
-  file is no longer the blocker here — but a viewer/opener for whatever gets picked still isn't,
-  so upload stays out of scope for this entry specifically. "Add link" creates a `link`
-  document tagged `folderName = classId` and shares it with the class in one dialog (title +
-  URL, ≤3 taps); the section lists it back by filtering `GET /documents` client-side on that
-  same tag — a listing convenience only, not the access-control boundary (that's still the
-  `document_shares` row the same call creates). A link is copy-to-clipboard, not tap-to-open (no
-  `url_launcher` dependency yet)
+  **creating link-type notes only** (documented in docs/07-roadmap.md's Phase 4 step 7 entry):
+  real file *upload* still needs a picker wired to `POST /documents/upload-url` specifically,
+  which this pass didn't add (it's a separate, larger change than opening what already exists).
+  "Add link" creates a `link` document tagged `folderName = classId` and shares it with the
+  class in one dialog (title + URL, ≤3 taps); the section lists it back by filtering
+  `GET /documents` client-side on that same tag — a listing convenience only, not the
+  access-control boundary (that's still the `document_shares` row the same call creates).
+  **Opening what's already there is real now**: a `link` note opens in the device's own
+  browser (`url_launcher`, new dependency); any other `fileType` — this app never creates one,
+  but a document another client shared with this class is still real data, not something to
+  leave inert — downloads via `GET /documents/:id/file` and hands the bytes to the OS's own
+  viewer (`open_filex`, new dependency; `core/utils/file_opener.dart` is the shared piece both
+  this and Assignments, below, call). "Copy link" stays alongside tap-to-open, not replaced by
+  it
 - `features/notifications` — a Notification Center (list, mark-one/mark-all read) and a
   Preferences screen (per-category channel picker — push/daily digest/weekly digest/off; 'email'
   is deliberately not offered, since nothing sends it yet). Reached from the app bar bell icon on
@@ -166,13 +170,18 @@ inventory and flows this scaffold implements.
   section on the existing Class Detail screen** (matching the Fees/Notes precedent) — "New"
   creates a class-targeted assignment (title/description/due date/late+resubmission toggles, no
   attachment picker — documented deviation, same reasoning as Notes' link-only scope), tapping
-  one opens `AssignmentReviewScreen` (per-submission grade/feedback dialog, with a best-effort
-  student-name lookup reusing the Students feature's own list provider). Student side: the
-  Student dashboard's Assignments tab — previously stubbed with no builder, same as every other
-  non-Dashboard tab — is now wired to `StudentAssignmentsScreen`, and tapping an assignment opens
-  `AssignmentSubmitScreen` (shows description/attachments/due date, lets the student submit or
-  resubmit one external link — again link-only rather than a real upload — and shows grade/
-  feedback once reviewed). Individual-student-targeted assignments have no mobile creation UI
+  one opens `AssignmentReviewScreen` (per-submission grade/feedback dialog — now showing the
+  submission's own attachment links above the grade/feedback fields, tap-to-open, so a teacher
+  can actually see the work before grading it, not just attempt/late-status metadata; with a
+  best-effort student-name lookup reusing the Students feature's own list provider). Student
+  side: the Student dashboard's Assignments tab — previously stubbed with no builder, same as
+  every other non-Dashboard tab — is now wired to `StudentAssignmentsScreen`, and tapping an
+  assignment opens `AssignmentSubmitScreen` (shows description/attachments/due date, lets the
+  student submit or resubmit one external link — link-only rather than a real upload, same
+  reasoning as Notes' own upload deferral above — and shows grade/feedback once reviewed). Every
+  attachment/submission link either screen shows is now tap-to-open
+  (`core/utils/file_opener.dart`'s `openExternalUrl`) as well as copy.
+  Individual-student-targeted assignments have no mobile creation UI
   (class-targeting only); the backend supports both
 - `features/performance` — docs/07-roadmap.md's Phase 5 step 2. A **Performance section on the
   existing Student Detail screen** (matching the Fees precedent), teacher-only: "Record" opens a

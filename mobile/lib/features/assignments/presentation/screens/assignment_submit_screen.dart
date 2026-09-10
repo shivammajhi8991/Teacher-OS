@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/failure.dart';
+import '../../../../core/utils/file_opener.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
 import '../../domain/entities/assignment_summary.dart';
@@ -77,6 +78,16 @@ class _BodyState extends ConsumerState<_Body> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied.')));
   }
 
+  // Every attachment this screen's own Submit/Resubmit ever creates is a real http(s) URL (see
+  // the class doc comment), so opening one is always `openExternalUrl` — no download/open-file
+  // path needed here the way Notes' non-link documents need one.
+  Future<void> _openLink(String url) async {
+    final opened = await openExternalUrl(url);
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("Couldn't open that link.")));
+  }
+
   Future<void> _submit() async {
     final url = _urlController.text.trim();
     final uri = Uri.tryParse(url);
@@ -135,6 +146,7 @@ class _BodyState extends ConsumerState<_Body> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               dense: true,
+              onTap: () => _openLink(url),
               leading: const Icon(Icons.attachment),
               title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: IconButton(icon: const Icon(Icons.copy, size: 18), onPressed: () => _copyLink(url)),
@@ -145,6 +157,14 @@ class _BodyState extends ConsumerState<_Body> {
           Text('Your submission', style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 4),
           Text('Attempt ${submission.attemptNumber} · ${submission.isLate ? "Late" : "On time"}'),
+          for (final url in submission.attachmentUrls)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              onTap: () => _openLink(url),
+              leading: const Icon(Icons.attachment),
+              title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
           if (submission.isReviewed) ...[
             const SizedBox(height: 8),
             if (submission.grade != null) Text('Grade: ${submission.grade}', style: Theme.of(context).textTheme.titleMedium),

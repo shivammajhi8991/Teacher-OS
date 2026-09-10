@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import '../../../../core/error/failure.dart';
 import '../../../../core/network/api_exception_mapper.dart';
 import '../../../../core/utils/result.dart';
 import '../../domain/entities/document_summary.dart';
@@ -55,5 +58,38 @@ class NotesRepositoryImpl implements NotesRepository {
     } on DioException catch (e) {
       return Err(mapDioExceptionToFailure(e));
     }
+  }
+
+  @override
+  Future<Result<Uint8List>> downloadFile(String documentId) async {
+    try {
+      return Ok(await _remoteDataSource.downloadFile(documentId));
+    } on DioException catch (e) {
+      return Err(_mapBytesError(e));
+    }
+  }
+
+  /// Matching `reports_repository_impl.dart`'s identical precedent: a `ResponseType.bytes`
+  /// request means an *error* response also arrives as raw bytes, not the decoded JSON envelope
+  /// `mapDioExceptionToFailure` expects, so a real `{code, message}` (e.g. "This shared content
+  /// has expired") would otherwise be silently downgraded to a generic "Something went wrong".
+  Failure _mapBytesError(DioException e) {
+    final data = e.response?.data;
+    if (data is List<int>) {
+      try {
+        final decoded = jsonDecode(utf8.decode(data));
+        if (decoded is Map && decoded['error'] is Map) {
+          final error = decoded['error'] as Map;
+          return ApiFailure(
+            message: (error['message'] as String?) ?? 'Request failed',
+            code: (error['code'] as String?) ?? 'UNEXPECTED_ERROR',
+            statusCode: e.response?.statusCode,
+          );
+        }
+      } catch (_) {
+        // Not decodable JSON — fall through to the generic mapper below.
+      }
+    }
+    return mapDioExceptionToFailure(e);
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/failure.dart';
+import '../../../../core/utils/file_opener.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
@@ -417,36 +418,101 @@ class _NotesSection extends ConsumerWidget {
   }
 }
 
-class _NoteTile extends StatelessWidget {
+/// docs/07 roadmap "Notes" file viewer: a `link` note opens in the device's own browser
+/// (`core/utils/file_opener.dart`'s `openExternalUrl`); any other `fileType` — this app never
+/// creates one, but a document any other client shared with this class is still real data,
+/// not something to leave inert — downloads via `GET /documents/:id/file` and hands the bytes to
+/// the OS's own viewer (`openDownloadedBytes`). The extension on the temp file it writes is
+/// guessed from `fileType` alone, since neither this endpoint nor `DocumentSummary` carries a
+/// real one; "other" gets none, which is an honest reflection of not knowing what it actually is.
+class _NoteTile extends ConsumerStatefulWidget {
   const _NoteTile({required this.note});
 
   final DocumentSummary note;
 
-  Future<void> _copyLink(BuildContext context) async {
-    if (note.externalUrl == null) return;
-    await Clipboard.setData(ClipboardData(text: note.externalUrl!));
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Link copied.')),
+  @override
+  ConsumerState<_NoteTile> createState() => _NoteTileState();
+}
+
+class _NoteTileState extends ConsumerState<_NoteTile> {
+  bool _isOpening = false;
+
+  static const _extensionByFileType = {
+    'pdf': '.pdf',
+    'image': '.jpg',
+    'video': '.mp4',
+    'audio': '.mp3',
+  };
+
+  Future<void> _copyLink() async {
+    final url = widget.note.externalUrl;
+    if (url == null) return;
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copied.')));
+  }
+
+  Future<void> _open() async {
+    final note = widget.note;
+    if (note.isExpired) return;
+    setState(() => _isOpening = true);
+
+    if (note.isLink) {
+      final opened = note.externalUrl != null && await openExternalUrl(note.externalUrl!);
+      if (!mounted) return;
+      setState(() => _isOpening = false);
+      if (!opened) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text("Couldn't open that link.")));
+      }
+      return;
+    }
+
+    final result = await ref.read(notesRepositoryProvider).downloadFile(note.id);
+    if (!mounted) return;
+    await result.fold(
+      (failure) async => ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(failure.message))),
+      (bytes) async {
+        try {
+          await openDownloadedBytes(
+            bytes,
+            '${note.title}${_extensionByFileType[note.fileType] ?? ''}',
+          );
+        } on FileOpenException catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        }
+      },
     );
+    if (!mounted) return;
+    setState(() => _isOpening = false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final note = widget.note;
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Icon(note.isLink ? Icons.link : Icons.insert_drive_file_outlined),
+      onTap: note.isExpired || _isOpening ? null : _open,
+      leading: _isOpening
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(note.isLink ? Icons.link : Icons.insert_drive_file_outlined),
       title: Text(note.title),
       subtitle: note.isLink
           ? Text(note.externalUrl ?? '', maxLines: 1, overflow: TextOverflow.ellipsis)
-          : const Text("Can't be opened in the app yet"),
+          : Text('Tap to open (${note.fileType})'),
       trailing: note.isExpired
           ? const Chip(label: Text('Expired'), visualDensity: VisualDensity.compact)
           : note.isLink
               ? IconButton(
                   icon: const Icon(Icons.copy, size: 20),
                   tooltip: 'Copy link',
-                  onPressed: () => _copyLink(context),
+                  onPressed: _copyLink,
                 )
               : null,
     );

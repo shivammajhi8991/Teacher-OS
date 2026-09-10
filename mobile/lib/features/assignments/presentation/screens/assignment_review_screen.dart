@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/error/failure.dart';
+import '../../../../core/utils/file_opener.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
@@ -16,6 +17,16 @@ class AssignmentReviewScreen extends ConsumerWidget {
   final String assignmentId;
   final String title;
 
+  // Every attachment a mobile-created submission carries is a real http(s) URL (see
+  // assignment_submit_screen.dart's own class doc comment) — opening one is always
+  // `openExternalUrl`, the same one-line call Notes/AssignmentSubmitScreen already use.
+  Future<void> _openLink(BuildContext context, String url) async {
+    final opened = await openExternalUrl(url);
+    if (!context.mounted || opened) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text("Couldn't open that link.")));
+  }
+
   Future<void> _openReviewDialog(
     BuildContext context,
     WidgetRef ref,
@@ -30,7 +41,24 @@ class AssignmentReviewScreen extends ConsumerWidget {
         title: const Text('Review submission'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (submission.attachmentUrls.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text('No attachment submitted.'),
+              )
+            else ...[
+              for (final url in submission.attachmentUrls)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  onTap: () => _openLink(context, url),
+                  leading: const Icon(Icons.attachment),
+                  title: Text(url, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              const SizedBox(height: 12),
+            ],
             TextField(controller: gradeController, decoration: const InputDecoration(labelText: 'Grade (optional)')),
             const SizedBox(height: 12),
             TextField(

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import '../../../../core/utils/result.dart';
 import '../entities/document_summary.dart';
 
@@ -17,4 +18,8 @@ abstract interface class NotesRepository {
     required String url,
     DateTime? expiryDate,
   });
+
+  /// docs/04 §4.4 GET /documents/:id/file — the bytes of a non-`link` document, for handing off
+  /// to the OS's own file viewer (`core/utils/file_opener.dart`).
+  Future<Result<Uint8List>> downloadFile(String documentId);
 }

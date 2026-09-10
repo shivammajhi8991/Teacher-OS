@@ -102,7 +102,19 @@ inventory and flows this scaffold implements.
   backend's own fire-and-forget job reaches `completed`/`failed`, then shows real totals
   (imported/failed counts) and every per-row error — one malformed row never fails the whole
   file, so the result is never a single pass/fail verdict. All wired into the Teacher dashboard's
-  Students tab (`RoleDashboardScaffold.tabBuilders`)
+  Students tab (`RoleDashboardScaffold.tabBuilders`). **Now also Institute Admin's own Students
+  tab** — the same `StudentListScreen`, unmodified in shape, since `GET /students` already
+  scopes institute_admin to their whole institute server-side (docs/06 §6.2: "F (institute)").
+  One real gap that scoping alone doesn't close: `StudentsService.create` — which Add, Invite,
+  and CSV import all ultimately call, the last one per row — has its own separate
+  `TEACHER_PROFILE_REQUIRED` gate no institute_admin account can pass (a backend TODO of its
+  own: "an institute_admin adding a student on behalf of one of their teachers needs its own
+  path once institute-scoped teacher lookup exists"). Rather than ship three actions that would
+  403 for this role, `StudentListScreen` now checks `activeRole` and hides Add/Invite/Import
+  (FAB, app-bar actions, and the empty-state CTA) for anyone who isn't a teacher; everything
+  else — view, search, filter, and (via Student Detail) edit/archive/guardians for an *existing*
+  student — already worked for institute_admin before this change (`assertWriteAccess` already
+  permitted it), so only the three creation-shaped actions are gated, not the whole screen
 - `features/classes` — list/create/edit, a schedule builder (weekday checkboxes generating an
   RFC 5545 rule, with the generated string editable directly for daily/monthly/custom cases),
   a live conflict-check panel, and a roster with enroll / waitlist-on-capacity. Deferred and
@@ -254,10 +266,13 @@ inventory and flows this scaffold implements.
   Notification center) are lists, not custom canvas widgets
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
-  docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student, Teachers
-  and Reports for Institute Admin; Student's own "Classes" and "Notes" tabs, and Institute
-  Admin's "Students" tab, are still the scaffold's default "coming soon" — genuine gaps, not
-  this pass's concern). The Teacher shell's "More" tab (`MoreMenuScreen`) holds Reports and
+  docs/08 §8.1 bottom-nav tabs (Students is wired for both Teacher and Institute Admin — the
+  same `StudentListScreen`, `GET /students` already scoping each correctly server-side, per
+  docs/06 §6.2's "F (institute)" row; see `features/students` above for the one real gap that
+  scoping alone doesn't close — Assignments for Student, Teachers and Reports for Institute
+  Admin; Student's own "Classes" and "Notes" tabs are still the scaffold's default "coming soon"
+  — a genuine gap, not this pass's concern). The Teacher shell's "More" tab (`MoreMenuScreen`)
+  holds Reports and
   Settings — both real screens, pushed rather than tabbed since burying them one tap deeper
   keeps the primary bar from exceeding 5 items. Every role's own Profile/Settings tab is
   `AccountSettingsScreen` now too (`features/auth` above)

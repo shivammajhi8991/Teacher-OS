@@ -4,6 +4,8 @@ import '../../../../core/error/failure.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/error_view.dart';
 import '../../../../core/widgets/loading_view.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../auth/presentation/providers/auth_state.dart';
 import '../../domain/entities/student.dart';
 import '../providers/students_providers.dart';
 import 'student_detail_screen.dart';
@@ -11,7 +13,21 @@ import 'student_form_screen.dart';
 import 'student_import_screen.dart';
 
 /// docs/08 §8.2 "Student list" — search + status filter chips, sorted by name; overdue-first
-/// sorting is a Fees-module concern (docs/08 §8.4), not this screen's.
+/// sorting is a Fees-module concern (docs/08 §8.4), not this screen's. Shared by the Teacher
+/// dashboard's Students tab and (now) Institute Admin's — `GET /students` already scopes both
+/// roles correctly server-side (own students vs. the whole institute), matching how every other
+/// "one screen, the backend decides scope" pattern in this app already works.
+///
+/// Add/Invite/Import are hidden for anyone who isn't a teacher, not just de-emphasized: all
+/// three ultimately call `StudentsService.create` (Invite and CSV import use it per-invite/
+/// per-row too), which has its own real, pre-existing gate —
+/// `TEACHER_PROFILE_REQUIRED` when the caller has no teacher profile, which every institute_admin
+/// account genuinely doesn't — tracked on the backend as its own TODO ("an institute_admin adding
+/// a student on behalf of one of their teachers needs its own path once institute-scoped teacher
+/// lookup exists"), not something to build as a side effect of wiring up this tab. Everything
+/// else here — view, search, filter, and (via Student Detail) edit/archive/guardians for an
+/// *existing* student — already works for institute_admin today (`assertWriteAccess` explicitly
+/// permits it), so only the three creation-shaped actions are gated, not the whole screen.
 class StudentListScreen extends ConsumerStatefulWidget {
   const StudentListScreen({super.key});
 
@@ -79,22 +95,27 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   Widget build(BuildContext context) {
     final studentsAsync = ref.watch(studentListProvider);
     final filter = ref.watch(studentListFilterProvider);
+    final authState = ref.watch(authNotifierProvider);
+    final canCreateStudents =
+        authState is AuthAuthenticated && authState.user.activeRole == 'teacher';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Students'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.upload_file_outlined),
-            tooltip: 'Import CSV',
-            onPressed: _openImport,
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_add_alt_outlined),
-            tooltip: 'Invite student',
-            onPressed: _showInviteDialog,
-          ),
-        ],
+        actions: canCreateStudents
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.upload_file_outlined),
+                  tooltip: 'Import CSV',
+                  onPressed: _openImport,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.person_add_alt_outlined),
+                  tooltip: 'Invite student',
+                  onPressed: _showInviteDialog,
+                ),
+              ]
+            : null,
       ),
       body: Column(
         children: [
@@ -148,9 +169,11 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 (failure) => ErrorView(failure: failure, onRetry: () => ref.invalidate(studentListProvider)),
                 (students) => students.isEmpty
                     ? EmptyState(
-                        message: 'No students yet — add your first student to get started.',
-                        actionLabel: 'Add Student',
-                        onAction: _openAddStudent,
+                        message: canCreateStudents
+                            ? 'No students yet — add your first student to get started.'
+                            : 'No students yet.',
+                        actionLabel: canCreateStudents ? 'Add Student' : null,
+                        onAction: canCreateStudents ? _openAddStudent : null,
                       )
                     : RefreshIndicator(
                         onRefresh: () async => ref.invalidate(studentListProvider),
@@ -165,10 +188,12 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddStudent,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: canCreateStudents
+          ? FloatingActionButton(
+              onPressed: _openAddStudent,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }

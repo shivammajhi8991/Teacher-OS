@@ -7,6 +7,7 @@ import '../../../auth/presentation/screens/account_settings_screen.dart';
 import '../../../calendar/presentation/widgets/calendar_quick_action_card.dart';
 import '../../../institutes/presentation/screens/teacher_roster_screen.dart';
 import '../../../reports/presentation/screens/reports_screen.dart';
+import '../../../students/presentation/screens/student_list_screen.dart';
 import '../widgets/role_dashboard_scaffold.dart';
 
 /// docs/08 §8.1 Institute Admin shell, §8.2 Institute Admin screen inventory.
@@ -33,6 +34,9 @@ class InstituteAdminDashboardScreen extends ConsumerWidget {
         // institute_admin, but the type is nullable) falls back to the scaffold's own "coming
         // soon" rather than crashing on a null instituteId.
         if (instituteId != null) 1: (context) => TeacherRosterScreen(instituteId: instituteId),
+        2: (context) => const StudentListScreen(), // was "coming soon" — GET /students already
+        // scopes to this institute server-side; see that screen's own class doc comment for why
+        // Add/Invite/Import stay hidden for this role specifically
         3: (context) => const ReportsScreen(), // docs/07 Phase 5 step 5
         4: (context) => const AccountSettingsScreen(), // docs/01 §1.3 data export/deletion
       },

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../assignments/presentation/screens/student_assignments_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../auth/presentation/screens/account_settings_screen.dart';
 import '../../../calendar/presentation/widgets/calendar_quick_action_card.dart';
 import '../widgets/role_dashboard_scaffold.dart';
 
@@ -23,6 +24,7 @@ class StudentDashboardScreen extends ConsumerWidget {
       ],
       tabBuilders: {
         2: (context) => const StudentAssignmentsScreen(), // docs/07 Phase 5 step 1
+        4: (context) => const AccountSettingsScreen(), // docs/01 §1.3 data export/deletion
       },
       dashboardExtra: const CalendarQuickActionCard(), // docs/07 Phase 5 step 6
       summaryTiles: const [

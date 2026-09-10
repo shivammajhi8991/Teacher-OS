@@ -1,14 +1,29 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/theme/modernist.dart';
+import '../../../../core/widgets/modernist_primitives.dart';
 import '../providers/auth_providers.dart';
+import '../providers/auth_state.dart';
 
 /// docs/01 §1.3 self-service data export / account deletion (Phase 6) — the in-app screen those
 /// endpoints needed to actually satisfy Apple's App Review Guideline 5.1.1(v) (account deletion
-/// reachable *from within the app*, not just via a raw API call). Wired into the Teacher shell's
-/// More menu for now (docs/08 §8.1's own "Settings has no screen anywhere yet" note); Student/
-/// Parent/Institute Admin's own Profile/Settings tab placeholders would just point here too, the
-/// same one-line wiring — not done in this pass, named rather than silently deferred.
+/// reachable *from within the app*, not just via a raw API call).
+///
+/// Modernist redesign: wired into every role's Profile/Settings tab now, not just the Teacher
+/// shell's More menu — `account_settings_screen.dart`'s own prior doc comment named this
+/// explicitly as "not done in this pass" for Student/Parent/Institute Admin, and it's the same
+/// one-line wiring for each. Body restyled to M.* tokens/primitives; the two dialogs
+/// (export's JSON viewer, delete's password-confirm) are left as plain `AlertDialog`s,
+/// matching this whole redesign's own precedent of leaving confirm dialogs in Material rather
+/// than rebuilding them (Student Detail's archive/add-guardian dialogs, Record Payment's none —
+/// the system's own widgets are screen primitives, not a dialog-chrome replacement).
+///
+/// This screen carries no Scaffold/AppBar of its own — it's pure content, same shape as
+/// `ParentFeesTab`/`FeesOverviewScreen` — so it drops cleanly into a tabBuilder for Student/
+/// Parent/Institute Admin. The Teacher shell still reaches it by *pushing* it from
+/// `MoreMenuScreen`, which supplies its own Scaffold+AppBar wrapper at the push site instead,
+/// the same pattern `_ParentHomeExtra` already uses to push the tab-shaped `ParentFeesTab`.
 class AccountSettingsScreen extends ConsumerWidget {
   const AccountSettingsScreen({super.key});
 
@@ -92,29 +107,53 @@ class AccountSettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.download_outlined),
-            title: const Text('Export my data'),
-            subtitle: const Text('Download a copy of your account data'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _exportData(context, ref),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-            title: Text(
-              'Delete my account',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+    final scheme = Theme.of(context).colorScheme;
+    final authState = ref.watch(authNotifierProvider);
+    final user = authState is AuthAuthenticated ? authState.user : null;
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        if (user != null) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(M.gutter, M.s4, M.gutter, M.s4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(user.fullName, style: M.sectionTitle),
+                      const SizedBox(height: M.s2),
+                      Text(
+                        user.email ?? user.phone ?? '',
+                        style: M.body.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                MTag(user.activeRole.replaceAll('_', ' ')),
+              ],
             ),
-            subtitle: const Text('Permanently sign out and delete this account'),
-            onTap: () => _confirmAndDeleteAccount(context, ref),
           ),
         ],
-      ),
+        const MRule(),
+        const MSectionLabel('Your data'),
+        MRow(
+          title: 'Export my data',
+          sub: 'Download a copy of your account data',
+          onTap: () => _exportData(context, ref),
+        ),
+        const MRule(),
+        const MSectionLabel('Danger zone'),
+        MRow(
+          title: 'Delete my account',
+          sub: 'Permanently sign out and delete this account',
+          onTap: () => _confirmAndDeleteAccount(context, ref),
+        ),
+        const SizedBox(height: M.s6),
+      ],
     );
   }
 }

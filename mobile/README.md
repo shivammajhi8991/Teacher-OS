@@ -73,14 +73,17 @@ inventory and flows this scaffold implements.
   (Phase 5 step 4) — `GET /auth/me`'s response always carried each role's own `instituteId`, but
   `MeResponseDto`/`AppUser` only ever kept `activeRole`; the Teachers roster and the
   institute-wide announcement compose action both need it without a separate round trip.
-  **Scope cut, named rather than silently missing**: Phase 6's `GET /auth/account/export` /
-  `POST /auth/account/delete` are backend-only — no mobile screen calls them yet. This matters
-  more than the usual "backend-only, mobile deferred" pattern elsewhere in this README: Apple's
-  App Review Guideline 5.1.1(v) specifically requires account deletion be reachable *from within
-  the app itself*, not just via a raw API call, so this pair isn't actually submission-ready until
-  a real Settings/Account screen exists to reach them from — a small, well-defined addition (two
-  buttons + a password-confirm dialog against endpoints that already work) rather than a backend
-  gap
+  **Apple App Review Guideline 5.1.1(v)** specifically requires account deletion be reachable
+  *from within the app itself*, not just via a raw API call — `AccountSettingsScreen` (Phase 6)
+  is that screen, calling `GET /auth/account/export` and `POST /auth/account/delete` (the latter
+  behind a password-confirm dialog). It was already reachable from the Teacher shell's More
+  menu; this pass closed the actual remaining gap — Student/Parent/Institute Admin's own Profile/
+  Settings tabs were still "coming soon" placeholders pointing nowhere — by wiring the same
+  screen into all three (one line each: `tabBuilders`) and restyling its body to M.* tokens/
+  primitives (the two dialogs — export's JSON viewer, delete's password-confirm — stay plain
+  `AlertDialog`s, matching how every confirm dialog in this redesign was left alone). No Scaffold/
+  AppBar of its own now, so it drops cleanly into a tab; the Teacher shell's More menu supplies
+  one at the push site instead
 - `features/onboarding` — category grid (loaded from the backend) → progressive profile form
   (Category / Basics / Teaching details / Review, per docs/08 §8.5) as 4 custom steps behind a
   progress rule (Modernist redesign, below, dropped `Stepper`); a fresh teacher registration is
@@ -143,7 +146,9 @@ inventory and flows this scaffold implements.
   every dashboard (`role_dashboard_scaffold.dart`'s previously-stubbed `onPressed: () {}`, now
   wired, with an unread-count badge), and Preferences is reached from the Notification Center's
   own app bar — not from a Profile/Settings tab, since none of the four dashboards' Profile/
-  Settings tabs have a real screen behind them yet (all still "coming soon"). The Dashboard tab's
+  Settings tabs had a real screen behind them at the time this shipped. They do now
+  (`AccountSettingsScreen`, see `features/auth` above), but Preferences stays here rather than
+  being duplicated onto a second settings surface. The Dashboard tab's
   "Recent activity" card (docs/08 §8.7's own layout diagram: "last 5, 'see all' → notif center")
   was a static placeholder and is now wired to the same data. Deferred, documented in
   `notifications_repository.dart`'s header comment: real FCM device-token registration — it
@@ -186,8 +191,8 @@ inventory and flows this scaffold implements.
   gives Parent no write access to payments, so there's no "Record payment" button here unlike the
   Teacher-facing Fees section; the Modernist redesign's fee band (below) keeps that boundary too,
   its one action pushing the same read-only tab rather than a payment flow. Its Announcements tab
-  is now wired too (see `features/announcements` below); Profile stays "coming soon" (generic,
-  not part of any step yet)
+  is now wired too (see `features/announcements` below); Profile is `AccountSettingsScreen` now
+  (see `features/auth` above), not a generic placeholder
 - `features/announcements` — docs/07-roadmap.md's Phase 5 step 4. One shared
   `AnnouncementsListScreen`, reached differently per role exactly as docs/08 §8.2 specifies for
   each: Parent's own dashboard tab (was "coming soon"), Student's from the Notification center
@@ -234,8 +239,12 @@ inventory and flows this scaffold implements.
 - `features/dashboard` — one shared `RoleDashboardScaffold` (docs/08 §8.7 layout) + the four
   role-specific dashboard screens (Teacher/Student/Parent/Institute Admin), each with its
   docs/08 §8.1 bottom-nav tabs (Students is wired for Teacher, Assignments for Student, Teachers
-  and Reports for Institute Admin; the Teacher shell's "More" tab got its first real entry this
-  step too — a small `MoreMenuScreen` with one item, Reports; the rest still show "coming soon")
+  and Reports for Institute Admin; Student's own "Classes" and "Notes" tabs, and Institute
+  Admin's "Students" tab, are still the scaffold's default "coming soon" — genuine gaps, not
+  this pass's concern). The Teacher shell's "More" tab (`MoreMenuScreen`) holds Reports and
+  Settings — both real screens, pushed rather than tabbed since burying them one tap deeper
+  keeps the primary bar from exceeding 5 items. Every role's own Profile/Settings tab is
+  `AccountSettingsScreen` now too (`features/auth` above)
 - `features/admin` — docs/07-roadmap.md's Phase 5 step 8. `AdminPanelShellScreen`: a
   `NavigationRail`-based side-nav shell (docs/02 §2.8's "presentation layer is separate from
   mobile's" — this is that separate presentation layer, hosted for now at `/admin-panel` since no

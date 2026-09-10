@@ -5,6 +5,7 @@ import '../../../../core/theme/modernist.dart';
 import '../../../../core/widgets/modernist_primitives.dart';
 import '../../../announcements/presentation/screens/announcements_list_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../auth/presentation/screens/account_settings_screen.dart';
 import '../../../attendance/presentation/providers/attendance_providers.dart';
 import '../../../calendar/domain/entities/calendar_event.dart';
 import '../../../calendar/presentation/providers/calendar_providers.dart';
@@ -98,6 +99,7 @@ class ParentDashboardScreen extends ConsumerWidget {
       tabBuilders: {
         1: (context) => const ParentFeesTab(), // docs/07 Phase 5 step 3
         2: (context) => const AnnouncementsListScreen(), // docs/07 Phase 5 step 4 — read-only
+        3: (context) => const AccountSettingsScreen(), // docs/01 §1.3 data export/deletion
       },
       appBarBottom: appBarBottom,
       dashboardExtra: dashboardExtra,

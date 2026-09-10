@@ -31,7 +31,12 @@ class MoreMenuScreen extends StatelessWidget {
             subtitle: const Text('Export your data or delete your account'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+              MaterialPageRoute(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('Settings')),
+                  body: const AccountSettingsScreen(),
+                ),
+              ),
             ),
           ),
         ],

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../announcements/presentation/screens/announcements_list_screen.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/presentation/providers/auth_state.dart';
+import '../../../auth/presentation/screens/account_settings_screen.dart';
 import '../../../calendar/presentation/widgets/calendar_quick_action_card.dart';
 import '../../../institutes/presentation/screens/teacher_roster_screen.dart';
 import '../../../reports/presentation/screens/reports_screen.dart';
@@ -33,6 +34,7 @@ class InstituteAdminDashboardScreen extends ConsumerWidget {
         // soon" rather than crashing on a null instituteId.
         if (instituteId != null) 1: (context) => TeacherRosterScreen(instituteId: instituteId),
         3: (context) => const ReportsScreen(), // docs/07 Phase 5 step 5
+        4: (context) => const AccountSettingsScreen(), // docs/01 §1.3 data export/deletion
       },
       dashboardExtra: instituteId == null
           ? null

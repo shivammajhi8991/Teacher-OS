@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import 'admin_audit_log_screen.dart';
 import 'admin_institutes_screen.dart';
 import 'admin_teacher_categories_screen.dart';
 import 'admin_users_screen.dart';
@@ -20,13 +21,16 @@ import 'admin_verification_queue_screen.dart';
 /// under). This shell is the presentation-layer source that target would serve; today it's simply
 /// the route a super_admin's mobile session lands on.
 ///
-/// docs/08 §8.2's full Admin Web Panel list has seven screens; four have real backend support
-/// this pass (Users, Institutes, Teacher categories, Verification queue). The remaining three —
-/// Reported content, System config, Audit log viewer — have no backing data model anywhere in
-/// this codebase (no flagging mechanism, no system-config table, and `audit_logs` was never
-/// actually built beyond seeding its own `audit_log.read` permission back in Phase 4 step 1) and
-/// are not invented here; they show as real nav destinations with an honest "coming soon" rather
-/// than being silently hidden, so the gap stays visible instead of vanishing.
+/// docs/08 §8.2's full Admin Web Panel list has seven screens; five have real backend support
+/// now (Users, Institutes, Teacher categories, Verification queue, and — new — Audit log, which
+/// unifies `attendance_audit_log` and `payment_audit_log`, the only two audit trails this
+/// codebase actually writes to, behind the `audit_log.read` permission that was seeded back in
+/// Phase 4 step 1 but never actually read from anywhere until now). The remaining two — Reported
+/// content, System config — have no backing data model anywhere in this codebase (no flagging/
+/// moderation mechanism, no system-config table — neither is specced in docs/01-08 beyond a
+/// bare endpoint path in docs/04 §4.4) and are not invented here; they show as real nav
+/// destinations with an honest "coming soon" rather than being silently hidden, so the gap stays
+/// visible instead of vanishing.
 class AdminPanelShellScreen extends ConsumerStatefulWidget {
   const AdminPanelShellScreen({super.key});
 
@@ -41,7 +45,7 @@ enum _AdminDestination {
   verificationQueue('Verification queue', Icons.verified_outlined, AdminVerificationQueueScreen()),
   reportedContent('Reported content', Icons.flag_outlined, null),
   systemConfig('System config', Icons.tune, null),
-  auditLog('Audit log', Icons.history, null);
+  auditLog('Audit log', Icons.history, AdminAuditLogScreen());
 
   const _AdminDestination(this.label, this.icon, this.screen);
 

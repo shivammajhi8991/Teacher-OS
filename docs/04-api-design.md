@@ -139,14 +139,15 @@ GET  /api/v1/reports/students/:id?format=pdf
 ```
 Large exports run as an async job (`POST .../export-jobs` → poll `GET /export-jobs/:id` → signed download URL) rather than blocking the request — consistent with the CSV import pattern.
 
-**Admin** (separate guard, `super_admin` only)
+**Admin** (guarded per-route by a permission also grantable to institute_admin — `user.administer`,
+`audit_log.read` — not a separate super_admin-exclusive mechanism; see `src/modules/admin/README.md`)
 ```
 GET/PATCH  /api/v1/admin/users
 GET/PATCH  /api/v1/admin/institutes
 POST       /api/v1/admin/teacher-categories        # add a new category — no deploy needed
-GET        /api/v1/admin/reported-content
-GET        /api/v1/admin/audit-logs
-PATCH      /api/v1/admin/system-config
+GET        /api/v1/admin/reported-content          # not implemented — no backing data model
+GET        /api/v1/admin/audit-logs                # implemented: unifies attendance_audit_log + payment_audit_log, cursor-paginated
+PATCH      /api/v1/admin/system-config              # not implemented — no backing data model
 ```
 
 ## 4.5 RBAC enforcement

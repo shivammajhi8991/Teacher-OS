@@ -1,6 +1,7 @@
 import '../../../../core/utils/result.dart';
 import '../entities/admin_teacher_category.dart';
 import '../entities/admin_user.dart';
+import '../entities/audit_log_entry.dart';
 import '../entities/verification_queue_entry.dart';
 
 abstract interface class AdminRepository {
@@ -26,4 +27,10 @@ abstract interface class AdminRepository {
   Future<Result<AdminTeacherCategory>> createTeacherCategory({required String name, String? icon});
 
   Future<Result<AdminTeacherCategory>> updateTeacherCategory(String id, {bool? isActive});
+
+  /// docs/08 §8.2 Admin Web Panel "Audit log". Unifies attendance-record and payment-status
+  /// audit trails — the only two this codebase actually writes to — into one time-sorted feed;
+  /// see `admin_panel_shell_screen.dart`'s own doc comment for why Reported content and System
+  /// config have no equivalent here.
+  Future<Result<AuditLogPage>> listAuditLog({String? source, String? cursor, int limit = 50});
 }

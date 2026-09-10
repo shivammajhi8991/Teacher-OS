@@ -23,6 +23,7 @@ import { PerformanceModule } from './modules/performance/performance.module';
 import { AnnouncementsModule } from './modules/announcements/announcements.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -79,6 +80,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
     AnnouncementsModule,
     ReportsModule,
     CalendarModule,
+    AdminModule,
   ],
   providers: [
     // Order matters: Nest runs global guards in this declared order, and the throttler's

@@ -3,11 +3,13 @@ import '../../../../core/network/api_exception_mapper.dart';
 import '../../../../core/utils/result.dart';
 import '../../domain/entities/admin_teacher_category.dart';
 import '../../domain/entities/admin_user.dart';
+import '../../domain/entities/audit_log_entry.dart';
 import '../../domain/entities/verification_queue_entry.dart';
 import '../../domain/repositories/admin_repository.dart';
 import '../datasources/admin_remote_data_source.dart';
 import '../dto/admin_teacher_category_dto.dart';
 import '../dto/admin_user_dto.dart';
+import '../dto/audit_log_entry_dto.dart';
 import '../dto/verification_queue_entry_dto.dart';
 
 class AdminRepositoryImpl implements AdminRepository {
@@ -93,6 +95,16 @@ class AdminRepositoryImpl implements AdminRepository {
     try {
       final json = await _remoteDataSource.updateTeacherCategory(id, isActive: isActive);
       return Ok(AdminTeacherCategoryDto.fromJson(json).toEntity());
+    } on DioException catch (e) {
+      return Err(mapDioExceptionToFailure(e));
+    }
+  }
+
+  @override
+  Future<Result<AuditLogPage>> listAuditLog({String? source, String? cursor, int limit = 50}) async {
+    try {
+      final json = await _remoteDataSource.listAuditLog(source: source, cursor: cursor, limit: limit);
+      return Ok(AuditLogPageDto.fromJson(json).toEntity());
     } on DioException catch (e) {
       return Err(mapDioExceptionToFailure(e));
     }

@@ -54,4 +54,19 @@ class AdminRemoteDataSource {
     });
     return response.data as Map<String, dynamic>;
   }
+
+  /// docs/04 §4.4 GET /admin/audit-logs — cursor is the previous page's last entry's `changedAt`
+  /// (ISO string), matching `AdminController.listAuditLog`'s own "not an opaque token" choice.
+  Future<Map<String, dynamic>> listAuditLog({
+    String? source,
+    String? cursor,
+    int limit = 50,
+  }) async {
+    final response = await _dio.get('/admin/audit-logs', queryParameters: {
+      if (source != null) 'source': source,
+      if (cursor != null) 'cursor': cursor,
+      'limit': limit,
+    });
+    return response.data as Map<String, dynamic>;
+  }
 }

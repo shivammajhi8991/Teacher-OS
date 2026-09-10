@@ -285,9 +285,18 @@ inventory and flows this scaffold implements.
   `features/institutes`'s new `listAll()`), `AdminTeacherCategoriesScreen` (reuses onboarding's
   own `teacherCategoriesProvider`; create dialog + deactivate — a documented gap: the public list
   endpoint only returns active categories, so a deactivated one has no way back into this list to
-  reactivate from here), and `AdminVerificationQueueScreen` (card list, approve/reject-with-reason
-  dialog) — plus three more nav destinations (Reported content, System config, Audit log) with an
-  honest "coming soon" `EmptyState`, matching the backend's own documented scope cuts. A real,
+  reactivate from here), `AdminVerificationQueueScreen` (card list, approve/reject-with-reason
+  dialog), and now `AdminAuditLogScreen` — a new `GET /admin/audit-logs` (backend, new) unifies
+  `attendance_audit_log` and `payment_audit_log`, the only two audit trails this codebase
+  actually writes to, into one cursor-paginated feed behind the `audit_log.read` permission that
+  was seeded back in Phase 4 step 1 but never actually read from anywhere until now; the screen
+  itself manages its own "load more" pagination state rather than a `FutureProvider`, same
+  reasoning as Record Payment's polling loop and CSV import's job-status fetch. The remaining two
+  nav destinations — Reported content, System config — still show an honest "coming soon"
+  `EmptyState`: neither has a backing data model anywhere in this codebase (no flagging/
+  moderation mechanism, no system-config table — docs/04 §4.4 sketches bare endpoint paths for
+  both, but docs/01-08 never specs what either would actually contain), so nothing was invented
+  for either. A real,
   previously-invisible router bug was found and fixed wiring this up: `super_admin` had always
   landed on the same institute-scoped `/admin` route as `institute_admin`, a screen keyed entirely
   off `AppUser.instituteId` (which `super_admin` has as `null`) — no test had ever exercised a
